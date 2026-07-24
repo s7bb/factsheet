@@ -1,4 +1,4 @@
-# S7bb
+# S7bb Factsheet
 
 S7bb is a small, independent project that tracks the **operational quality of
 the S-Bahn line S7 at the station Baierbrunn** (Munich S-Bahn network):
