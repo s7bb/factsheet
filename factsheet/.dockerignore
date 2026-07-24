@@ -1,0 +1,6 @@
+output/
+*.pdf
+CLAUDE.md
+README.md
+__pycache__/
+*.pyc
