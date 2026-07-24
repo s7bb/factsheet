@@ -39,32 +39,19 @@ jobs:
           pip install -r factsheet/requirements.txt
           python -m playwright install --with-deps chromium
 
-      - name: Claude Code installieren
-        run: npm install -g @anthropic-ai/claude-code
-
-      - name: Datenblatt via Claude Code erzeugen
+      - name: Datenblatt erzeugen
         working-directory: factsheet
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           INPUT_MONTH: ${{ github.event.inputs.month }}
         run: |
+          # Deterministischer Generator, kein LLM. Leerer Monat = Vormonat.
           if [ -n "$INPUT_MONTH" ]; then
-            TASK="Erzeuge das S7-Baierbrunn-Datenblatt fuer den Monat $INPUT_MONTH."
+            python generate.py --month "$INPUT_MONTH"
           else
-            TASK="Erzeuge das S7-Baierbrunn-Datenblatt fuer den zuletzt abgeschlossenen Kalendermonat (Vormonat)."
+            python generate.py
           fi
-          claude -p "$TASK Lies zuerst CLAUDE.md und halte dich strikt daran. \
-            Die Vorlage ist fest: Position, Art und Farbe der Elemente duerfen \
-            sich NICHT aendern, nur die Daten. Fuehre generate.py aus, pruefe die \
-            Konsolen-Zusammenfassung auf Plausibilitaet und dass keine Layout- \
-            oder Finalisierungs-Warnung erscheint. Committe anschliessend nur die \
-            neue Datei unter factsheet/output/. Erfinde keine Zahlen und aendere \
-            kein Layout." \
-            --allowedTools "Bash(python generate.py:*),Read,Glob,Grep" \
-            --max-turns 25 \
-            --output-format text
 
-      - name: Ergebnis committen (Fallback, falls Claude nicht committet hat)
+      - name: Ergebnis committen
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

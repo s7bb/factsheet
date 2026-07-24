@@ -37,9 +37,8 @@ python generate.py --month 2026-06 # bestimmter Monat (Backfill)
 
 Ergebnis: `output/S7_Baierbrunn_<Monat><Jahr>_Datenblatt.pdf`.
 
-`generate.py` ist eigenstaendig und benoetigt kein LLM. Claude Code wird nur
-verwendet, um den Lauf zu orchestrieren, das Ergebnis zu pruefen und zu
-committen - und um sich anzupassen, falls sich das Upstream-Datenschema aendert.
+`generate.py` ist eigenstaendig und benoetigt kein LLM. Der CI-Lauf ruft das
+Skript direkt auf; es gibt keine KI/Model-Abhaengigkeit im Erzeugungspfad.
 
 ## Automatischer Monatslauf
 
@@ -48,32 +47,26 @@ Der Workflow `.github/workflows/monthly-factsheet.yml` (an der Repo-Wurzel):
 - laeuft am **2. jedes Monats** (Cron `0 6 2 * *`), wenn der Vormonat finalisiert
   ist, und laesst sich ueber **"Run workflow"** manuell mit optionalem Monat
   starten;
-- installiert Python-Abhaengigkeiten, Chromium und Claude Code;
-- fuehrt Claude Code headless im Verzeichnis `factsheet/` aus (`claude -p ...`),
-  das gemaess `CLAUDE.md` `generate.py` startet, das Ergebnis prueft und nach
-  `factsheet/output/` committet;
+- installiert Python-Abhaengigkeiten und Chromium;
+- fuehrt `python generate.py` im Verzeichnis `factsheet/` aus (leerer Monat =
+  Vormonat, sonst der angegebene Monat);
+- committet das erzeugte PDF nach `factsheet/output/`;
 - sichert das PDF zusaetzlich als Build-Artefakt.
 
 ### Einrichtung
 
-1. Repository-Secret **`ANTHROPIC_API_KEY`** hinterlegen
-   (Settings → Secrets and variables → Actions), z. B.:
-   ```bash
-   gh secret set ANTHROPIC_API_KEY --body "sk-ant-..."
-   ```
-2. Sicherstellen, dass Actions Schreibrechte haben
+1. Sicherstellen, dass Actions Schreibrechte haben
    (Settings → Actions → General → Workflow permissions → *Read and write*).
    Der Workflow setzt dazu bereits `permissions: contents: write`.
 
+Kein API-Key noetig - der Workflow verwendet kein LLM.
+
 ### Hinweise
 
-- In CI laeuft Claude Code mit `--dangerously-skip-permissions` (nicht-interaktiv)
-  und `--max-turns 25` als Sicherheitsgrenze. Die Toolauswahl ist auf
-  `Bash,Read,Write,Edit,Glob,Grep` eingeschraenkt.
-- Alternativ zum CLI-Aufruf gibt es die offizielle Action
-  `anthropics/claude-code-action@v1`; das obige Setup nutzt bewusst den bare-CLI
-  fuer maximale Transparenz und Nachvollziehbarkeit im Cron-Kontext.
-- Ein Commit-Fallback-Schritt committet das PDF auch dann, wenn Claude Code es
-  selbst nicht getan hat.
+- Der Erzeugungspfad ist rein deterministisch (pandas + Playwright/Chromium).
+  Einzige externe Netzwerkquelle: `raw.githubusercontent.com/s7bb/s7bb-data`
+  (statische Monats-JSON).
+- Der Commit-Schritt committet das PDF nur, wenn sich unter `factsheet/output/`
+  tatsaechlich etwas geaendert hat.
 
 Details zu Definitionen, Konventionen und Sonderfaellen: siehe `CLAUDE.md`.
