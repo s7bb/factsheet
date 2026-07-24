@@ -8,6 +8,9 @@ how cancellations affect the picture.
 It is a community effort built from publicly observable arrival data. Nothing
 here is official.
 
+📄 **[Latest factsheet (PDF)](https://github.com/s7bb/factsheet/releases/latest)** —
+the most recent monthly one-pager, always pointing at the newest release.
+
 ## Repositories
 
 | Repository | Purpose |
