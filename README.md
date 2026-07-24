@@ -38,3 +38,8 @@ may be incomplete or contain errors. It is provided **as is, without warranty of
 any kind**, for informational purposes only, and is not an official statement of
 service quality. For official information, refer to Deutsche Bahn / S-Bahn
 München directly.
+
+## Colophon
+
+The code in this repository was created with
+[Claude Code](https://claude.com/claude-code) and the Superpowers skill set.
