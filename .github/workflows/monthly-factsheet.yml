@@ -60,8 +60,7 @@ jobs:
             oder Finalisierungs-Warnung erscheint. Committe anschliessend nur die \
             neue Datei unter factsheet/output/. Erfinde keine Zahlen und aendere \
             kein Layout." \
-            --allowedTools "Bash,Read,Write,Edit,Glob,Grep" \
-            --dangerously-skip-permissions \
+            --allowedTools "Bash(python generate.py:*),Read,Glob,Grep" \
             --max-turns 25 \
             --output-format text
 
