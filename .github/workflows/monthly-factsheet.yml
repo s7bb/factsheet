@@ -46,11 +46,22 @@ jobs:
           INPUT_MONTH: ${{ github.event.inputs.month }}
         run: |
           # Deterministischer Generator, kein LLM. Leerer Monat = Vormonat.
+          # stderr wird mitgeloggt, damit die Warnungen des Generators pruefbar sind.
           set -euo pipefail
           if [ -n "$INPUT_MONTH" ]; then
-            python generate.py --month "$INPUT_MONTH" | tee gen.log
+            python generate.py --month "$INPUT_MONTH" 2>&1 | tee gen.log
           else
-            python generate.py | tee gen.log
+            python generate.py 2>&1 | tee gen.log
+          fi
+          # Finalisierungs-Guard: nicht finalisierten Monat NICHT veroeffentlichen.
+          if grep -q 'noch nicht finalisiert' gen.log; then
+            echo "::error::Berichtsmonat noch nicht finalisiert - Abbruch, kein Release." >&2
+            exit 1
+          fi
+          # Plausibilitaets-Guard: kaputtes (mehrseitiges) Layout nicht veroeffentlichen.
+          if grep -q '> eine A4-Seite' gen.log; then
+            echo "::error::Inhalt > eine A4-Seite - Anomalie, kein Release." >&2
+            exit 1
           fi
           # PDF-Pfad und Berichtsmonat aus der Generator-Ausgabe ableiten.
           PDF=$(grep -oE 'output/[^ ]+\.pdf' gen.log | head -n1)

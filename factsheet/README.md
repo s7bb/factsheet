@@ -69,5 +69,9 @@ Kein API-Key noetig - der Workflow verwendet kein LLM.
   (statische Monats-JSON).
 - Das Release wird ueber `gh release` mit dem automatisch bereitgestellten
   `GITHUB_TOKEN` angelegt; kein zusaetzliches Secret noetig.
+- **Finalisierungs-Guard:** Ist der Berichtsmonat upstream noch nicht als
+  `finalized` markiert (oder ueberschreitet der Inhalt eine A4-Seite), bricht der
+  Lauf mit Fehler ab und veroeffentlicht **kein** Release. Bei Bedarf spaeter
+  erneut anstossen, sobald der Vormonat finalisiert ist.
 
 Details zu Definitionen, Konventionen und Sonderfaellen: siehe `CLAUDE.md`.
