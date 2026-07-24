@@ -1,0 +1,85 @@
+name: Monatsdatenblatt S7 Baierbrunn
+
+# Laeuft am 2. jedes Monats um 06:00 UTC (der Vormonat ist dann finalisiert)
+# und laesst sich zusaetzlich manuell mit optionalem Monat anstossen.
+# Skript und CLAUDE.md liegen im Unterverzeichnis factsheet/.
+on:
+  schedule:
+    - cron: "0 6 2 * *"
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "Berichtsmonat YYYY-MM (leer = Vormonat)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write        # noetig, damit das erzeugte PDF committet werden kann
+
+concurrency:
+  group: factsheet
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest   # bringt Node.js 22 bereits mit
+    timeout-minutes: 20
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Abhaengigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r factsheet/requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Claude Code installieren
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Datenblatt via Claude Code erzeugen
+        working-directory: factsheet
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          INPUT_MONTH: ${{ github.event.inputs.month }}
+        run: |
+          if [ -n "$INPUT_MONTH" ]; then
+            TASK="Erzeuge das S7-Baierbrunn-Datenblatt fuer den Monat $INPUT_MONTH."
+          else
+            TASK="Erzeuge das S7-Baierbrunn-Datenblatt fuer den zuletzt abgeschlossenen Kalendermonat (Vormonat)."
+          fi
+          claude -p "$TASK Lies zuerst CLAUDE.md und halte dich strikt daran. \
+            Die Vorlage ist fest: Position, Art und Farbe der Elemente duerfen \
+            sich NICHT aendern, nur die Daten. Fuehre generate.py aus, pruefe die \
+            Konsolen-Zusammenfassung auf Plausibilitaet und dass keine Layout- \
+            oder Finalisierungs-Warnung erscheint. Committe anschliessend nur die \
+            neue Datei unter factsheet/output/. Erfinde keine Zahlen und aendere \
+            kein Layout." \
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep" \
+            --dangerously-skip-permissions \
+            --max-turns 25 \
+            --output-format text
+
+      - name: Ergebnis committen (Fallback, falls Claude nicht committet hat)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain factsheet/output/)" ]; then
+            git add factsheet/output/
+            git commit -m "Datenblatt automatisch aktualisiert ($(date -u +%Y-%m-%d))"
+            git push
+          else
+            echo "Keine Aenderungen in factsheet/output/ - nichts zu committen."
+          fi
+
+      - name: PDF als Artefakt sichern
+        uses: actions/upload-artifact@v4
+        with:
+          name: s7bb-datenblatt
+          path: factsheet/output/*.pdf
+          if-no-files-found: warn
