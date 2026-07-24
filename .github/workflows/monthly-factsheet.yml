@@ -1,11 +1,12 @@
 name: Monatsdatenblatt S7 Baierbrunn
 
-# Laeuft am 2. jedes Monats um 06:00 UTC (der Vormonat ist dann finalisiert)
-# und laesst sich zusaetzlich manuell mit optionalem Monat anstossen.
+# Laeuft am 1. jedes Monats um 12:00 UTC (fuer den Vormonat) und laesst sich
+# zusaetzlich manuell mit optionalem Monat anstossen. Das erzeugte PDF wird als
+# GitHub-Release mit Tag MM.YYYY (z. B. 07.2026) veroeffentlicht.
 # Skript und CLAUDE.md liegen im Unterverzeichnis factsheet/.
 on:
   schedule:
-    - cron: "0 6 2 * *"
+    - cron: "0 12 1 * *"
   workflow_dispatch:
     inputs:
       month:
@@ -14,7 +15,7 @@ on:
         default: ""
 
 permissions:
-  contents: write        # noetig, damit das erzeugte PDF committet werden kann
+  contents: write        # noetig, um Release + Tag anzulegen
 
 concurrency:
   group: factsheet
@@ -45,27 +46,38 @@ jobs:
           INPUT_MONTH: ${{ github.event.inputs.month }}
         run: |
           # Deterministischer Generator, kein LLM. Leerer Monat = Vormonat.
+          set -euo pipefail
           if [ -n "$INPUT_MONTH" ]; then
-            python generate.py --month "$INPUT_MONTH"
+            python generate.py --month "$INPUT_MONTH" | tee gen.log
           else
-            python generate.py
+            python generate.py | tee gen.log
           fi
+          # PDF-Pfad und Berichtsmonat aus der Generator-Ausgabe ableiten.
+          PDF=$(grep -oE 'output/[^ ]+\.pdf' gen.log | head -n1)
+          YM=$(grep -oE 'Berichtsmonat: [0-9]{4}-[0-9]{2}' gen.log | grep -oE '[0-9]{4}-[0-9]{2}')
+          if [ -z "$PDF" ] || [ -z "$YM" ]; then
+            echo "Konnte PDF-Pfad oder Berichtsmonat nicht ermitteln." >&2
+            exit 1
+          fi
+          # Release-Tag im Format MM.YYYY (z. B. 2026-07 -> 07.2026).
+          TAG="${YM:5:2}.${YM:0:4}"
+          {
+            echo "PDF_PATH=factsheet/$PDF"
+            echo "REPORT_YM=$YM"
+            echo "RELEASE_TAG=$TAG"
+          } >> "$GITHUB_ENV"
 
-      - name: Ergebnis committen
+      - name: Release veroeffentlichen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain factsheet/output/)" ]; then
-            git add factsheet/output/
-            git commit -m "Datenblatt automatisch aktualisiert ($(date -u +%Y-%m-%d))"
-            git push
+          set -euo pipefail
+          TITLE="S7 Baierbrunn Datenblatt ${REPORT_YM}"
+          NOTES="Automatisch erzeugtes Monatsdatenblatt (${REPORT_YM})."
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            # Release existiert bereits (z. B. Backfill/Re-Run): PDF ersetzen.
+            gh release upload "$RELEASE_TAG" "$PDF_PATH" --clobber
           else
-            echo "Keine Aenderungen in factsheet/output/ - nichts zu committen."
+            gh release create "$RELEASE_TAG" "$PDF_PATH" \
+              --title "$TITLE" --notes "$NOTES"
           fi
-
-      - name: PDF als Artefakt sichern
-        uses: actions/upload-artifact@v4
-        with:
-          name: s7bb-datenblatt
-          path: factsheet/output/*.pdf
-          if-no-files-found: warn

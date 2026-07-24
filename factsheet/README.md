@@ -44,14 +44,15 @@ Skript direkt auf; es gibt keine KI/Model-Abhaengigkeit im Erzeugungspfad.
 
 Der Workflow `.github/workflows/monthly-factsheet.yml` (an der Repo-Wurzel):
 
-- laeuft am **2. jedes Monats** (Cron `0 6 2 * *`), wenn der Vormonat finalisiert
-  ist, und laesst sich ueber **"Run workflow"** manuell mit optionalem Monat
+- laeuft am **1. jedes Monats um 12:00 UTC** (Cron `0 12 1 * *`) fuer den
+  Vormonat und laesst sich ueber **"Run workflow"** manuell mit optionalem Monat
   starten;
 - installiert Python-Abhaengigkeiten und Chromium;
 - fuehrt `python generate.py` im Verzeichnis `factsheet/` aus (leerer Monat =
   Vormonat, sonst der angegebene Monat);
-- committet das erzeugte PDF nach `factsheet/output/`;
-- sichert das PDF zusaetzlich als Build-Artefakt.
+- veroeffentlicht das erzeugte PDF als **GitHub-Release** mit Tag `MM.YYYY`
+  (z. B. `07.2026`). Bei erneutem Lauf fuer denselben Monat wird das PDF im
+  bestehenden Release ersetzt.
 
 ### Einrichtung
 
@@ -66,7 +67,7 @@ Kein API-Key noetig - der Workflow verwendet kein LLM.
 - Der Erzeugungspfad ist rein deterministisch (pandas + Playwright/Chromium).
   Einzige externe Netzwerkquelle: `raw.githubusercontent.com/s7bb/s7bb-data`
   (statische Monats-JSON).
-- Der Commit-Schritt committet das PDF nur, wenn sich unter `factsheet/output/`
-  tatsaechlich etwas geaendert hat.
+- Das Release wird ueber `gh release` mit dem automatisch bereitgestellten
+  `GITHUB_TOKEN` angelegt; kein zusaetzliches Secret noetig.
 
 Details zu Definitionen, Konventionen und Sonderfaellen: siehe `CLAUDE.md`.
