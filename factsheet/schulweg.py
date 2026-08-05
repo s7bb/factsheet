@@ -15,6 +15,7 @@ import json
 import sys
 import urllib.parse
 import urllib.request
+from collections import Counter
 
 # Feste gesetzliche Feiertage in Bayern (Monat, Tag).
 # Mariae Himmelfahrt gilt in ueberwiegend katholischen Gemeinden; Baierbrunn
@@ -187,3 +188,41 @@ def tage_im_monat(month):
     if schultage:
         return schultage, False, quelle
     return werktage, True, quelle
+
+
+# Zeitfenster Morgenverkehr als Minute des Tages, Ortszeit, beide Grenzen
+# eingeschlossen: 06:30 bis 08:30.
+WINDOW_VON, WINDOW_BIS = 390, 510
+
+SLOTS = 6          # feste Zeilenzahl im Raster
+SLOT_ABSTAND = 10  # Mindestabstand zweier Slot-Mitten in Minuten
+
+
+def hhmm(minute):
+    """Minute des Tages -> 'HH:MM'."""
+    return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+def slot_centres(minutes):
+    """Slot-Mitten aus den Daten ableiten statt sie fest zu verdrahten.
+
+    Haeufigste Ankunftsminuten zuerst, jede neue Mitte muss mindestens
+    SLOT_ABSTAND Minuten von allen bisherigen entfernt sein. Damit werden
+    Fahrplan-Abweichungen von +/-1 Minute eingesammelt, unabhaengig davon, wo
+    in der Stunde die Zuege liegen."""
+    counts = Counter(minutes)
+    centres = []
+    for minute, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        if all(abs(minute - c) >= SLOT_ABSTAND for c in centres):
+            centres.append(minute)
+        if len(centres) == SLOTS:
+            break
+    return sorted(centres)
+
+
+def assign_slot(minute, centres):
+    """Index der naechstgelegenen Slot-Mitte; bei Gleichstand die fruehere."""
+    if not centres:
+        return None
+    return min(range(len(centres)),
+               key=lambda i: (abs(minute - centres[i]), centres[i]))
