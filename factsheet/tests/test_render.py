@@ -42,7 +42,7 @@ def test_spark_handles_all_zero_delays():
 
 import pytest
 
-from schulweg import fmt, render_html_schulweg
+from schulweg import SLOTS, fmt, render_html_schulweg
 
 
 def test_fmt_renders_none_as_dash():
@@ -93,8 +93,9 @@ def test_html_has_no_em_dash():
 
 
 def test_html_shows_six_slot_rows():
+    assert len(empty_stats()["slots"]) == SLOTS
     html = render_html_schulweg(empty_stats(), "Juli", 2026, "2026-07")
-    assert html.count('class="slot-row"') == 6
+    assert html.count('class="slot-row"') == SLOTS
 
 
 def test_fallback_month_is_labelled_in_the_header():

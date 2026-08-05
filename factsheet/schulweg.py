@@ -459,7 +459,12 @@ def render_html_schulweg(s, month_label, year, archive_month):
 
     proben = [d[r]["n"] for d in (x["dirs"] for x in s["slots"])
               for r in RICHTUNGEN if d[r]["n"]]
-    spanne = (f"{min(proben)}–{max(proben)}" if proben else "0")
+    if not proben:
+        spanne = "0"
+    elif min(proben) == max(proben):
+        spanne = str(min(proben))
+    else:
+        spanne = f"{min(proben)}–{max(proben)}"
 
     kopf = ('<div class="colhead"><div class="kpi-lab"></div>'
             + "".join(f"<span>{DIR_LABEL[r]}</span>" for r in RICHTUNGEN)
@@ -484,9 +489,9 @@ def render_html_schulweg(s, month_label, year, archive_month):
   <div class="section-t">Morgenverkehr im Vergleich zum Gesamtmonat</div>
   {kopf}
   {kpi_strip(s)}
-  <div class="notemark">{basis} Der Klammerwert je Zelle ist der Monatswert
-  &uuml;ber alle Tage und alle Stunden und entspricht dem Wert im
-  Monatsdatenblatt.</div>
+  <div class="notemark">{basis} Die Zeile <b>Monat</b> je Zelle ist der
+  Vergleichswert &uuml;ber alle Tage und alle Stunden und entspricht dem Wert
+  im Monatsdatenblatt.</div>
 </div>
 
 <div class="card">
