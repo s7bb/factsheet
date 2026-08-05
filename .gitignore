@@ -9,3 +9,7 @@ __pycache__/
 
 # Superpowers SDD scratch (ledger, briefs, review packages)
 .superpowers/
+
+# Erzeugte PDFs - werden als GitHub-Release-Assets veroeffentlicht, nicht committet
+factsheet/output/*
+!factsheet/output/.gitkeep
