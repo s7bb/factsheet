@@ -352,7 +352,9 @@ rendered from the table.
 
 - [ ] **Step 4: Write the failing test**
 
-Append to `factsheet/tests/test_kalender.py`:
+Append to `factsheet/tests/test_kalender.py`. **Merge the import lines below
+into the existing import block at the top of the file** — do not leave imports
+scattered mid-module.
 
 ```python
 import json
@@ -409,6 +411,7 @@ def test_ferien_table_within_coverage():
     lo, hi = (dt.date.fromisoformat(x) for x in FERIEN_ABGEDECKT)
     for a, b in FERIEN:
         assert lo <= dt.date.fromisoformat(a)
+        assert dt.date.fromisoformat(b) <= hi
 
 
 def test_weihnachtsferien_2026_start_on_the_24th():
