@@ -86,8 +86,15 @@ FERIEN = [
     ("2027-11-02", "2027-11-05"),   # Herbstferien
     ("2027-11-17", "2027-11-17"),   # Buß- und Bettag
     ("2027-12-24", "2028-01-07"),   # Weihnachtsferien
+    ("2028-02-28", "2028-03-03"),   # Frühjahrsferien
+    ("2028-04-10", "2028-04-21"),   # Osterferien
+    ("2028-06-06", "2028-06-16"),   # Pfingstferien
+    ("2028-07-31", "2028-09-11"),   # Sommerferien
+    ("2028-10-30", "2028-11-03"),   # Herbstferien
+    ("2028-11-22", "2028-11-22"),   # Buß- und Bettag
+    ("2028-12-23", "2029-01-05"),   # Weihnachtsferien
 ]
-FERIEN_ABGEDECKT = ("2025-08-01", "2028-01-31")
+FERIEN_ABGEDECKT = ("2025-08-01", "2028-12-31")
 
 
 def ferien_api(von, bis, timeout=15):

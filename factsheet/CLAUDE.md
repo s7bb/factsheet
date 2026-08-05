@@ -273,12 +273,42 @@ alten Datum stehen, obwohl die Tabelle aktualisiert wurde.
 ### `FERIEN`-Wartung
 
 `FERIEN_ABGEDECKT` markiert den Zeitraum, den die hinterlegte Tabelle
-abdeckt (aktuell bis **2028-01-31**). Erneuere die Tabelle mit
-`tools/refresh_ferien.py`, bevor dieses Datum erreicht wird. Liegt der
-Berichtsmonat ausserhalb von `FERIEN_ABGEDECKT`, bricht der Lauf **nur dann**
-ab, wenn zusaetzlich die OpenHolidays-API nicht erreichbar ist - diese
+abdeckt. Liegt der Berichtsmonat ausserhalb davon, bricht der Lauf **nur
+dann** ab, wenn zusaetzlich die OpenHolidays-API nicht erreichbar ist - diese
 Kombination ist beabsichtigt: Solange die API antwortet, braucht es die
 Tabelle gar nicht.
+
+**Der Monatslauf erneuert die Tabelle selbst.** Der Workflow ruft vor dem
+Erzeugen der Datenblaetter `tools/refresh_ferien.py --write` auf und committet
+das Ergebnis, sofern es sich geaendert hat. Das Abdeckungsende waechst dabei
+auf den 31.12. des uebernaechsten Jahres mit; von Hand ist normalerweise
+nichts zu tun.
+
+Drei Sicherungen haengen daran - keine davon entfernen:
+
+1. **Plausibilitaetspruefung** (`pruefe()` im Skript): unlesbare Datumswerte,
+   Ende vor Beginn, ueberlappende Zeitraeume, zu wenige Zeitraeume pro Jahr
+   oder ein leeres Jahr fuehren zum Abbruch, *bevor* `schulweg.py` angefasst
+   wird. Ohne sie koennte genau der kaputte API-Zustand, gegen den die Tabelle
+   absichert, die Tabelle zerstoeren.
+2. **Testlauf vor dem Commit**: schlaegt die Suite mit der neuen Tabelle fehl,
+   wird die Aenderung verworfen und die bisherige Tabelle bleibt aktiv.
+3. **Schrumpf-Schutz**: ein Fenster, das die bisherige Abdeckung verkuerzen
+   wuerde, wird abgelehnt (`--allow-shrink` erzwingt es). Sonst verloeren
+   Backfills aelterer Monate ihren Fallback.
+
+Ein Fehlschlag des Refresh **bricht den Monatslauf nicht ab** - die
+Datenblaetter sind Pflicht, die Tabellenpflege ist Kuer. Von Hand:
+
+```bash
+python tools/refresh_ferien.py --write     # patcht schulweg.py
+python tools/refresh_ferien.py             # nur Ausgabe, aendert nichts
+```
+
+Die API begrenzt ein Abfragefenster auf drei Jahre; laengere Zeitraeume
+zerlegt das Skript selbst in Teilfenster. Zeitraeume duerfen ueber das
+Abdeckungsende hinausragen (die Weihnachtsferien laufen ins Folgejahr) -
+entscheidend ist, dass sie **innerhalb** der Abdeckung beginnen.
 
 ### Werktage-Fallback
 
