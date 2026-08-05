@@ -11,6 +11,10 @@ Das Skript ist deterministisch und benoetigt kein LLM. Die Praesentation von
 generate.py wird nicht veraendert, nur wiederverwendet.
 """
 import datetime as dt
+import json
+import sys
+import urllib.parse
+import urllib.request
 
 # Feste gesetzliche Feiertage in Bayern (Monat, Tag).
 # Mariae Himmelfahrt gilt in ueberwiegend katholischen Gemeinden; Baierbrunn
@@ -43,3 +47,143 @@ def feiertage(year):
     ostern = easter(year)
     days |= {ostern + dt.timedelta(days=off) for off in FEIERTAGE_OSTERN}
     return days
+
+
+API_SCHULFERIEN = "https://openholidaysapi.org/SchoolHolidays"
+
+# Bayern hat sieben Ferienzeitraeume pro Jahr (inkl. Buss- und Bettag). Eine
+# Antwort mit weniger als fuenf gilt als unplausibel: ein HTTP 200 mit leerer
+# Liste wuerde sonst jeden Werktag zum Schultag machen, und das PDF saehe dabei
+# voellig normal aus.
+MIN_FERIEN_PRO_JAHR = 5
+
+QUELLE_API = "OpenHolidays API"
+FERIEN_STAND = "2026-08-05"
+QUELLE_TABELLE = f"hinterlegte Tabelle (Stand {FERIEN_STAND})"
+
+# Erzeugt mit tools/refresh_ferien.py aus der OpenHolidays-API.
+# Nicht von Hand bearbeiten - Skript erneut laufen lassen.
+FERIEN = [
+    ("2025-08-01", "2025-09-15"),   # Sommerferien
+    ("2025-11-03", "2025-11-07"),   # Herbstferien
+    ("2025-11-19", "2025-11-19"),   # Buß- und Bettag
+    ("2025-12-22", "2026-01-05"),   # Weihnachtsferien
+    ("2026-02-16", "2026-02-20"),   # Frühjahrsferien
+    ("2026-03-30", "2026-04-10"),   # Osterferien
+    ("2026-05-26", "2026-06-05"),   # Pfingstferien
+    ("2026-08-03", "2026-09-14"),   # Sommerferien
+    ("2026-11-02", "2026-11-06"),   # Herbstferien
+    ("2026-11-18", "2026-11-18"),   # Buß- und Bettag
+    ("2026-12-24", "2027-01-08"),   # Weihnachtsferien
+    ("2027-02-08", "2027-02-12"),   # Frühjahrsferien
+    ("2027-03-22", "2027-04-02"),   # Osterferien
+    ("2027-05-18", "2027-05-28"),   # Pfingstferien
+    ("2027-08-02", "2027-09-13"),   # Sommerferien
+    ("2027-11-02", "2027-11-05"),   # Herbstferien
+    ("2027-11-17", "2027-11-17"),   # Buß- und Bettag
+    ("2027-12-24", "2028-01-07"),   # Weihnachtsferien
+]
+FERIEN_ABGEDECKT = ("2025-08-01", "2028-01-31")
+
+
+def ferien_api(von, bis, timeout=15):
+    """Bayerische Schulferien von OpenHolidays.
+
+    Gibt None zurueck, wenn die Abfrage fehlschlaegt ODER die Antwort
+    unplausibel ist. Beides fuehrt zum Tabellen-Fallback."""
+    query = urllib.parse.urlencode({
+        "countryIsoCode": "DE",
+        "subdivisionCode": "DE-BY",
+        "languageIsoCode": "DE",
+        "validFrom": von,
+        "validTo": bis,
+    })
+    try:
+        with urllib.request.urlopen(f"{API_SCHULFERIEN}?{query}", timeout=timeout) as r:
+            data = json.load(r)
+    except Exception as e:
+        print(f"WARNUNG: OpenHolidays nicht erreichbar ({e}) - "
+              f"{QUELLE_TABELLE} wird verwendet.", file=sys.stderr)
+        return None
+
+    try:
+        ranges = sorted((e["startDate"], e["endDate"]) for e in data
+                        if e.get("type") == "School")
+    except (AttributeError, KeyError, TypeError) as e:
+        print(f"WARNUNG: Unerwartete Antwort von OpenHolidays ({e}) - "
+              f"{QUELLE_TABELLE} wird verwendet.", file=sys.stderr)
+        return None
+
+    if len(ranges) < MIN_FERIEN_PRO_JAHR:
+        print(f"WARNUNG: OpenHolidays liefert nur {len(ranges)} Ferienzeitraeume "
+              f"fuer {von}..{bis} (mindestens {MIN_FERIEN_PRO_JAHR} erwartet) - "
+              f"{QUELLE_TABELLE} wird verwendet.", file=sys.stderr)
+        return None
+    return ranges
+
+
+def ferien_ranges(year):
+    """(Zeitraeume, Quellenbezeichnung) fuer ein Kalenderjahr.
+
+    Eine Jahresabfrage liefert auch die Weihnachtsferien, die im Dezember
+    beginnen und ins Folgejahr laufen - die API gibt jeden Zeitraum zurueck,
+    der das Fenster ueberschneidet."""
+    aus_api = ferien_api(f"{year}-01-01", f"{year}-12-31")
+    if aus_api is not None:
+        return aus_api, QUELLE_API
+    return [tuple(r) for r in FERIEN], QUELLE_TABELLE
+
+
+def ist_ferientag(day, ranges):
+    """True, wenn der Tag in einem der Ferienzeitraeume liegt."""
+    return any(dt.date.fromisoformat(a) <= day <= dt.date.fromisoformat(b)
+               for a, b in ranges)
+
+
+def _monatsgrenzen(month):
+    year, mo = (int(x) for x in month.split("-"))
+    first = dt.date(year, mo, 1)
+    last = dt.date(year + (mo == 12), mo % 12 + 1, 1) - dt.timedelta(days=1)
+    return first, last
+
+
+def pruefe_abdeckung(month):
+    """Bricht ab, wenn der Monat nicht vollstaendig von FERIEN abgedeckt ist.
+    Gilt nur fuer den Tabellen-Fallback; antwortet die API, ist die Tabelle
+    nicht im Spiel."""
+    first, last = _monatsgrenzen(month)
+    lo, hi = (dt.date.fromisoformat(x) for x in FERIEN_ABGEDECKT)
+    if first < lo or last > hi:
+        raise SystemExit(
+            f"FEHLER: OpenHolidays nicht verfuegbar und {month} liegt "
+            f"ausserhalb der hinterlegten Ferientabelle "
+            f"({FERIEN_ABGEDECKT[0]}..{FERIEN_ABGEDECKT[1]}). "
+            f"Tabelle mit tools/refresh_ferien.py erneuern."
+        )
+
+
+def tage_im_monat(month):
+    """Schultage des Monats plus Quellenangabe.
+
+    Gibt es keine Schultage (reiner Ferienmonat), werden alle Werktage
+    zurueckgegeben; das zweite Element zeigt diesen Fallback an. Ein
+    Kalendermonat liegt immer in genau einem Jahr, daher genuegt ein
+    Jahresaufruf."""
+    first, last = _monatsgrenzen(month)
+    ranges, quelle = ferien_ranges(first.year)
+    if quelle != QUELLE_API:
+        pruefe_abdeckung(month)
+
+    werktage = []
+    day = first
+    while day <= last:
+        if day.weekday() < 5:
+            werktage.append(day)
+        day += dt.timedelta(days=1)
+
+    frei = feiertage(first.year)
+    schultage = [d for d in werktage
+                 if d not in frei and not ist_ferientag(d, ranges)]
+    if schultage:
+        return schultage, False, quelle
+    return werktage, True, quelle
