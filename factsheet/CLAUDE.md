@@ -45,7 +45,36 @@ Monat aendern sich ausschliesslich die Daten (Zahlen, Monatsname).**
 Das Layout ist datenunabhaengig: Jeder Monat rendert mit exakt derselben
 Elementanordnung, denselben Element-Typen (Donut, Balkenhistogramm, Richtungs-
 Kacheln, Zielbahnhof-Balken, Vergleichsbalken, Sparkline) und denselben Farben.
-Bestaetigt: Mai/Juni/Juli 2026 ergeben alle die identische Layouthoehe.
+Bestaetigt: Mai/Juni/Juli 2026 ergeben alle die identische Layouthoehe von
+**1116 px** (Grenze: 1123 px), also 7 px Reserve.
+
+### Einmalige Vorlagen-Revision 2026-08-05 (Chromium-Drift)
+
+Die Vorlage wurde **einmal** bewusst angepasst. Grund war keine Datenanomalie,
+sondern der Renderer: Chromium 151 setzte dieselbe, unveraenderte Vorlage
+1127 px hoch statt wie zuvor knapp unter 1123 px. Das PDF war dadurch
+tatsaechlich **zweiseitig**, und der A4-Guard des Workflows haette jeden
+Monatslauf abgebrochen.
+
+Nachgewiesen: Mai, Juni und Juli 2026 ergaben alle 1127 px (also
+datenunabhaengig), pandas 2.3.3 und 3.0.5 lieferten identische Zahlen und
+dieselbe Hoehe, und das aeltere Chromium im Container zeigte den Effekt nicht.
+
+Geaendert wurden ausschliesslich zwei Leerraum-Werte unterhalb des letzten
+Inhaltselements:
+
+- `.page` Innenabstand unten: `2mm` -> `0`
+- `.foot` `margin-top`: `4px` -> `0`
+
+Kein Element wurde entfernt, keine Farbe, kein Element-Typ und keine
+Reihenfolge geaendert; die Kennzahlen sind unveraendert (Zusammenfassungszeile
+vor und nach der Aenderung identisch). Einzige sichtbare Folge: die Fusszeile
+sitzt 4 px naeher an der letzten Kachel.
+
+**Das ist kein Praezedenzfall fuer Layout-Aenderungen.** Es war eine einmalige,
+dokumentierte Revision gegen eine Renderer-Regression, ausdruecklich vom
+Eigentuemer des Repos beauftragt. Mit den neuen Werten ist die Vorlage erneut
+eingefroren.
 
 Du darfst daher **nicht** veraendern:
 - die Praesentationsfunktionen `render_html`, `donut`, `histogram`,
@@ -73,6 +102,10 @@ unangetastet.
   wuerde die feste Vorlage verletzen. Behandle es als Anomalie: pruefe, ob die
   Daten ungewoehnlich sind (z. B. falscher/ nicht finalisierter Monat), und
   **committe nicht**. Melde den Fall, statt das Design anzupassen.
+- Pruefe dabei auch den **Renderer**: Ergibt die Warnung fuer *mehrere*
+  Monate dieselbe Hoehe, liegt es nicht an den Daten, sondern an einer neuen
+  Chromium-Version (siehe "Einmalige Vorlagen-Revision"). Auch dann nicht
+  eigenmaechtig das Layout anpassen - melden.
 - Wenn `WARNUNG: <Monat> ist noch nicht finalisiert` erscheint, wurde ein
   laufender Monat gewaehlt. Fuer den regulaeren Monatslauf ist das ein Fehler -
   pruefe, ob wirklich der Vormonat verarbeitet wird.

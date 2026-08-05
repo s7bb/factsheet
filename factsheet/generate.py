@@ -234,7 +234,7 @@ def render_html(s, month_label, month_file, year, archive_month):
 @page { size: A4; margin: 0; }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Helvetica Neue',Arial,sans-serif; color:#1c2733; width:210mm; }
-.page { padding:6mm 13mm 2mm; }
+.page { padding:6mm 13mm 0; }
 .head { display:flex; align-items:center; justify-content:space-between;
   border-bottom:3px solid #1b4f8a; padding-bottom:7px; margin-bottom:10px; }
 .brand { display:flex; align-items:center; gap:12px; }
@@ -286,7 +286,7 @@ h1 { font-size:21px; font-weight:800; letter-spacing:-.3px; }
 .calc-fill span { color:#fff;font-weight:800;font-size:12px;padding-right:10px; }
 .spark { width:100%;height:auto; }
 .spark-lab { font-size:9px;fill:#8592a1;text-anchor:middle; }
-.foot { margin-top:4px;padding-top:5px;border-top:1px solid #e2e8ef;
+.foot { margin-top:0;padding-top:5px;border-top:1px solid #e2e8ef;
   font-size:9.5px;color:#8592a1;display:flex;justify-content:space-between; }
 .notemark { font-size:10px;color:#6a7684;margin-top:5px;line-height:1.45; }
 """
