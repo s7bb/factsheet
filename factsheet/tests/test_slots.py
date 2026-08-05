@@ -28,9 +28,25 @@ def test_centres_work_off_the_midpoint():
     assert slot_centres(minutes) == [390, 410, 430, 450, 470, 490]
 
 
+def test_centres_reject_a_frequent_near_duplicate():
+    """Bewacht gezielt die SLOT_ABSTAND-Ausschlussregel: ohne sie wuerde die
+    haeufige Nachbarminute 401 (13 Treffer) den echten, weiter entfernten
+    sechsten Slot 500 (12 Treffer) verdraengen, weil reine Top-6-nach-
+    Haeufigkeit 401 vor 500 waehlen wuerde."""
+    minutes = (
+        [400] * 20 + [420] * 20 + [440] * 20 + [460] * 20 + [480] * 20
+        + [401] * 13 + [500] * 12
+    )
+    assert slot_centres(minutes) == [400, 420, 440, 460, 480, 500]
+
+
 def test_centres_tie_breaks_to_earlier_minute():
-    minutes = [400] * 5 + [460] * 5
-    assert slot_centres(minutes) == [400, 460]
+    """Echter Konkurrenzfall: 400 und 405 liegen innerhalb von SLOT_ABSTAND
+    und haben dieselbe Haeufigkeit, 405 kommt in den Daten zuerst vor. Nur
+    die fruehere Minute (400) darf ueberleben, sonst gewinnt die zuerst
+    eingefuegte (405)."""
+    minutes = [405] * 5 + [400] * 5
+    assert slot_centres(minutes) == [400]
 
 
 def test_fewer_than_six_centres_is_allowed():
