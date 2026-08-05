@@ -57,7 +57,7 @@ Das Layout ist datenunabhaengig: Jeder Monat rendert mit exakt derselben
 Elementanordnung, denselben Element-Typen (Donut, Balkenhistogramm, Richtungs-
 Kacheln, Zielbahnhof-Balken, Vergleichsbalken, Sparkline) und denselben Farben.
 Bestaetigt: Mai/Juni/Juli 2026 ergeben alle die identische Layouthoehe von
-**1116 px** (Grenze: 1123 px), also 7 px Reserve.
+**1093 px** (Grenze: 1123 px), also 30 px Reserve.
 
 ### Einmalige Vorlagen-Revision 2026-08-05 (Chromium-Drift)
 
