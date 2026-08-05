@@ -17,6 +17,9 @@ import urllib.parse
 import urllib.request
 from collections import Counter
 
+from generate import (MONATE, MONATE_DATEI, TZ, dn, load_month, prev_month,
+                      render_pdf)
+
 # Feste gesetzliche Feiertage in Bayern (Monat, Tag).
 # Mariae Himmelfahrt gilt in ueberwiegend katholischen Gemeinden; Baierbrunn
 # (Landkreis Muenchen) gehoert dazu.
@@ -343,3 +346,209 @@ def school_spark(daily):
             f'<polygon points="{area}" fill="#dbe7f5"/>'
             f'<polyline points="{poly}" fill="none" stroke="#1b4f8a" stroke-width="2"/>'
             f'{dots}{xlab}</svg>')
+
+
+def fmt(value, dec=1, suffix=""):
+    """Zahl deutsch formatieren; leere Stichproben werden zum Gedankenstrich."""
+    if value is None:
+        return "–"
+    return dn(value, dec) + suffix
+
+
+KPI_ZEILEN = [
+    ("Verfügbarkeit", "avail", 1, "%"),
+    ("pünktlich", "ontime", 1, "%"),
+    ("Ø Verspätung", "avg", 2, ""),
+    ("über 5 Min.", "gt5", 1, "%"),
+    ("p90 (Min.)", "p90", 0, ""),
+]
+
+DIR_LABEL = {"wolfratshausen": "&rarr; Wolfratshausen", "muenchen": "&rarr; M&uuml;nchen"}
+
+
+def kpi_strip(s):
+    rows = ""
+    for label, key, dec, suffix in KPI_ZEILEN:
+        cells = ""
+        for richtung in RICHTUNGEN:
+            win = fmt(s["win"][richtung][key], dec, suffix)
+            mon = fmt(s["mon"][richtung][key], dec, suffix)
+            cells += (f'<div class="kpi-cell"><span class="kv">{win}</span>'
+                      f'<span class="kr">Monat {mon}</span></div>')
+        rows += f'<div class="kpi-row"><div class="kpi-lab">{label}</div>{cells}</div>'
+    return rows
+
+
+def slot_grid(s):
+    werte = [d[r]["avg"] for d in (x["dirs"] for x in s["slots"])
+             for r in RICHTUNGEN if d[r]["avg"] is not None]
+    vmax = max(werte) if werte else 1
+    rows = ""
+    for slot in s["slots"]:
+        cells = ""
+        for richtung in RICHTUNGEN:
+            k = slot["dirs"][richtung]
+            breite = 100 * k["avg"] / vmax if k["avg"] is not None else 0
+            farbe = "#2e9e5b"
+            if k["avg"] is not None and k["avg"] > 5:
+                farbe = "#c8371f"
+            elif k["avg"] is not None and k["avg"] > 3:
+                farbe = "#f0902f"
+            ausf = (f'<span class="slot-canc">{k["canc"]} Ausf.</span>'
+                    if k["canc"] else '<span class="slot-canc"></span>')
+            cells += (f'<div class="slot-cell"><div class="slot-track">'
+                      f'<div class="slot-fill" style="width:{breite:.1f}%;'
+                      f'background:{farbe}"></div></div>'
+                      f'<span class="slot-val">{fmt(k["avg"], 2)}</span>{ausf}</div>')
+        rows += (f'<div class="slot-row"><div class="slot-lab">{slot["label"]}</div>'
+                 f'{cells}</div>')
+    return rows
+
+
+CSS = """
+@page { size: A4; margin: 0; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Helvetica Neue',Arial,sans-serif; color:#1c2733; width:210mm; }
+.page { padding:6mm 13mm 2mm; }
+.head { display:flex; align-items:center; justify-content:space-between;
+  border-bottom:3px solid #1b4f8a; padding-bottom:7px; margin-bottom:12px; }
+.brand { display:flex; align-items:center; gap:12px; }
+.logo { width:44px;height:44px;border-radius:9px;background:#1b4f8a;color:#fff;
+  font-weight:800;font-size:19px;display:flex;align-items:center;justify-content:center;letter-spacing:-1px; }
+h1 { font-size:21px; font-weight:800; letter-spacing:-.3px; }
+.sub { font-size:12px; color:#6a7684; margin-top:1px; }
+.period { text-align:right;font-size:12px;color:#6a7684; }
+.period b { display:block;font-size:17px;color:#1b4f8a;font-weight:800; }
+.section-t { font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1.1px;
+  color:#1b4f8a;margin:0 0 8px; display:flex;align-items:center;gap:7px; }
+.section-t::before { content:"";width:5px;height:14px;background:#1b4f8a;border-radius:2px; }
+.card { border:1px solid #e2e8ef;border-radius:11px;padding:12px 14px;background:#fbfcfd;margin-bottom:12px; }
+.colhead { display:flex;font-size:11px;font-weight:800;color:#1b4f8a;margin-bottom:6px; }
+.colhead .kpi-lab, .colhead .slot-lab { flex:none; }
+.colhead span { flex:1;text-align:center; }
+.kpi-row { display:flex;align-items:center;border-top:1px solid #eef2f6;padding:5px 0; }
+.kpi-lab { width:150px;flex:none;font-size:12px;font-weight:700; }
+.kpi-cell { flex:1;text-align:center; }
+.kpi-cell .kv { display:block;font-size:17px;font-weight:800;color:#1c2733; }
+.kpi-cell .kr { display:block;font-size:10px;color:#6a7684;margin-top:1px; }
+.slot-row { display:flex;align-items:center;border-top:1px solid #eef2f6;padding:6px 0; }
+.slot-lab { width:66px;flex:none;font-size:13px;font-weight:800;color:#1b4f8a; }
+.slot-cell { flex:1;display:flex;align-items:center;gap:8px;padding-right:14px; }
+.slot-track { flex:1;background:#eef2f6;border-radius:5px;height:16px; }
+.slot-fill { height:100%;border-radius:5px; }
+.slot-val { width:38px;flex:none;text-align:right;font-size:12px;font-weight:800; }
+.slot-canc { width:58px;flex:none;font-size:10px;color:#c8371f;font-weight:700; }
+.spark { width:100%;height:auto; }
+.spark-lab { font-size:9px;fill:#8592a1;text-anchor:middle; }
+.notemark { font-size:10px;color:#6a7684;margin-top:6px;line-height:1.45; }
+.foot { margin-top:4px;padding-top:5px;border-top:1px solid #e2e8ef;
+  font-size:9.5px;color:#8592a1;display:flex;justify-content:space-between; }
+"""
+
+
+def render_html_schulweg(s, month_label, year, archive_month):
+    if s["fallback"]:
+        tage = (f'{s["days"]} Werktage'
+                f'<br><span style="color:#c8371f">keine Schultage im Monat</span>')
+        basis = ("Im Berichtsmonat lagen keine Schultage. Ausgewiesen sind "
+                 "ersatzweise alle Werktage (Mo–Fr).")
+    else:
+        tage = f'{s["days"]} Schultage'
+        basis = ("Basis: Schultage in Bayern (ohne Wochenenden, gesetzliche "
+                 "Feiertage und bayerische Schulferien).")
+
+    proben = [d[r]["n"] for d in (x["dirs"] for x in s["slots"])
+              for r in RICHTUNGEN if d[r]["n"]]
+    spanne = (f"{min(proben)}–{max(proben)}" if proben else "0")
+
+    kopf = ('<div class="colhead"><div class="kpi-lab"></div>'
+            + "".join(f"<span>{DIR_LABEL[r]}</span>" for r in RICHTUNGEN)
+            + "</div>")
+    kopf_slots = ('<div class="colhead"><div class="slot-lab"></div>'
+                  + "".join(f"<span>{DIR_LABEL[r]}</span>" for r in RICHTUNGEN)
+                  + "</div>")
+
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>{CSS}</style></head>
+<body><div class="page">
+
+<div class="head">
+  <div class="brand">
+    <div class="logo">S7</div>
+    <div><h1>S-Bahn S7 &middot; Baierbrunn &middot; Schulweg</h1>
+      <div class="sub">Morgenverkehr Mo&ndash;Fr 06:30&ndash;08:30 &middot; planm&auml;&szlig;ige Ank&uuml;nfte in Baierbrunn</div></div>
+  </div>
+  <div class="period">Berichtszeitraum<b>{month_label} {year}</b>{tage}</div>
+</div>
+
+<div class="card">
+  <div class="section-t">Morgenverkehr im Vergleich zum Gesamtmonat</div>
+  {kopf}
+  {kpi_strip(s)}
+  <div class="notemark">{basis} Der Klammerwert je Zelle ist der Monatswert
+  &uuml;ber alle Tage und alle Stunden und entspricht dem Wert im
+  Monatsdatenblatt.</div>
+</div>
+
+<div class="card">
+  <div class="section-t">Je Fahrt &middot; planm&auml;&szlig;ige Ankunft in Baierbrunn</div>
+  {kopf_slots}
+  {slot_grid(s)}
+  <div class="notemark">Balkenl&auml;nge: &Oslash; Versp&auml;tung in Minuten,
+  gemeinsame Skala f&uuml;r beide Richtungen. Stichprobe je Fahrt und Richtung:
+  {spanne} Ank&uuml;nfte im Monat.</div>
+</div>
+
+<div class="card">
+  <div class="section-t">&Oslash; Versp&auml;tung je Tag</div>
+  {school_spark(s['daily'])}
+</div>
+
+<div class="foot">
+  <span>Quelle: s7bb-data (github.com/s7bb/s7bb-data) &middot; archive/{archive_month}.json
+  &middot; Ferien: {s['quelle']}</span>
+  <span>Bahnhof Baierbrunn &middot; Versp&auml;tungen &amp; Ausf&auml;lle gg&uuml;. Fahrplan</span>
+</div>
+
+</div></body></html>"""
+
+
+def main():
+    import argparse
+    import pathlib
+    import sys
+
+    ap = argparse.ArgumentParser(
+        description="S7-Baierbrunn-Schulweg-Datenblatt (PDF) erzeugen.")
+    ap.add_argument("--month", help="Berichtsmonat YYYY-MM (Standard: Vormonat)")
+    ap.add_argument("--outdir", default="output",
+                    help="Ausgabeverzeichnis (Standard: output)")
+    args = ap.parse_args()
+
+    month = args.month or prev_month(dt.datetime.now(TZ).date())
+    year, mo = (int(x) for x in month.split("-"))
+
+    print(f"Berichtsmonat: {month} ({MONATE[mo]} {year})")
+    df, _ = load_month(month)
+    s = compute_schulweg(df, month)
+    for warnung in s["warnungen"]:
+        print(warnung, file=sys.stderr)
+
+    html = render_html_schulweg(s, MONATE[mo], year, month)
+
+    outdir = pathlib.Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    pdf_path = outdir / f"S7_Baierbrunn_{MONATE_DATEI[mo]}{year}_Schulweg.pdf"
+    render_pdf(html, pdf_path)
+
+    print(f"Erstellt: {pdf_path}")
+    basis = "Werktage" if s["fallback"] else "Schultage"
+    for richtung in RICHTUNGEN:
+        k = s["win"][richtung]
+        print(f"  {richtung}: {k['n']} Fahrten an {s['days']} {basis} | "
+              f"Verf. {fmt(k['avail'], 1, '%')} | "
+              f"pünktlich {fmt(k['ontime'], 1, '%')} | "
+              f"Ø Versp. {fmt(k['avg'], 2)} Min.")
+
+
+if __name__ == "__main__":
+    main()
