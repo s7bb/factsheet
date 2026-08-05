@@ -62,6 +62,11 @@ Der Workflow `.github/workflows/monthly-factsheet.yml` (an der Repo-Wurzel):
   Vormonat und laesst sich ueber **"Run workflow"** manuell mit optionalem Monat
   starten;
 - installiert Python-Abhaengigkeiten und Chromium;
+- **erneuert die Ferientabelle** (`tools/refresh_ferien.py --write`) und
+  committet sie, wenn sie sich geaendert hat und die Testsuite mit ihr
+  durchlaeuft. Schlaegt der Refresh fehl, laeuft der Monatslauf mit der
+  bisherigen Tabelle weiter - die Datenblaetter sind Pflicht, die
+  Tabellenpflege ist Kuer;
 - fuehrt `python generate.py` gefolgt von `python schulweg.py` im Verzeichnis
   `factsheet/` aus (leerer Monat = Vormonat, sonst der angegebene Monat fuer
   beide Skripte);

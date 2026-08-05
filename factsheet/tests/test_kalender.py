@@ -78,10 +78,17 @@ def test_ferien_table_is_sorted_and_disjoint():
 
 
 def test_ferien_table_within_coverage():
+    """Jeder Zeitraum muss INNERHALB der Abdeckung beginnen.
+
+    Das Ende darf darueber hinausragen: die Weihnachtsferien beginnen im
+    Dezember und laufen ins Folgejahr (z. B. 2028-12-23..2029-01-05). Ohne
+    diesen Eintrag waere ein Dezember-Blatt am Rand der Abdeckung falsch.
+    """
     lo, hi = (dt.date.fromisoformat(x) for x in FERIEN_ABGEDECKT)
     for a, b in FERIEN:
-        assert lo <= dt.date.fromisoformat(a)
-        assert dt.date.fromisoformat(b) <= hi
+        start, ende = dt.date.fromisoformat(a), dt.date.fromisoformat(b)
+        assert lo <= start <= hi, f"{a}..{b} beginnt ausserhalb der Abdeckung"
+        assert ende >= lo, f"{a}..{b} endet vor Beginn der Abdeckung"
 
 
 def test_weihnachtsferien_2026_start_on_the_24th():
@@ -212,8 +219,18 @@ def test_buss_und_bettag_is_not_a_school_day(monkeypatch):
 
 @pytest.mark.network
 def test_live_api_matches_the_committed_table():
-    """Faengt Drift zwischen beiden Pfaden ab, bevor sie in ein PDF geraet."""
-    von, bis = FERIEN_ABGEDECKT
-    live = ferien_api(von, bis)
-    assert live is not None, "OpenHolidays nicht erreichbar"
+    """Faengt Drift zwischen beiden Pfaden ab, bevor sie in ein PDF geraet.
+
+    Ueber refresh_ferien.hole(), nicht ueber ferien_api(): die Abdeckung ist
+    inzwischen laenger als die drei Jahre, die eine einzelne API-Abfrage
+    zulaesst. hole() zerlegt das Fenster und fuehrt die Teile zusammen -
+    genau so ist die committete Tabelle entstanden.
+    """
+    import pathlib
+    import sys as _sys
+    _sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "tools"))
+    import refresh_ferien
+
+    von, bis = (dt.date.fromisoformat(x) for x in FERIEN_ABGEDECKT)
+    live = [(s, e) for s, e, _ in refresh_ferien.hole(von, bis)]
     assert live == [tuple(r) for r in FERIEN]
