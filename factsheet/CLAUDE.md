@@ -87,6 +87,27 @@ Puenktlichkeit, beide aus `donut()`):
 Gemessen nach der Korrektur: Versatz (0,0 / 0,0) px in beiden Donuts, Mai/
 Juni/Juli 2026. Seitenhoehe unveraendert 1116 px, Kennzahlen unveraendert.
 
+### Mini-Kacheln der Puenktlichkeit einzeilig (gleiche Revision)
+
+Die vier Kacheln brachen auf bis zu drei Zeilen um (`> 15 Min. Versp.`) und
+nutzten die Abkuerzung "Versp.". Beides ist behoben:
+
+- Beschriftungen jetzt `unter 5 Min.` / `ueber 5 Min.` / `ueber 15 Min.` /
+  `p90 (Min.)` - keine Abkuerzung mehr, jede genau **eine** Zeile.
+- `.mini .l` `9,5px` -> `8,5px`, Sperrung `.4px` -> `0`, `white-space:nowrap`;
+  `.mini` Abstand `10px` -> `6px`, Kachel-Innenabstand `7px 4px` -> `7px 3px`.
+
+**Warum das Wort nicht in jeder Kachel steht:** gemessen stehen je Kachel nur
+rund 60 px Textbreite zur Verfuegung. `> 15 Min. Verspaetung` ausgeschrieben
+braucht einzeilig eine Schriftgroesse von **3,9 px** - unlesbar. Das Wort
+"Verspaetung" steht deshalb einmal ausgeschrieben im Kartentext darueber
+("Ø Verspaetung ..."), die Kacheln tragen nur die Schwelle. Geringste
+Restreserve in der engsten Kachel: +5,5 px.
+
+Dadurch schrumpft die Karte um 23 px; da das Layout im Fluss liegt, ruecken
+alle folgenden Bloecke automatisch nach oben. Seitenhoehe **1116 px ->
+1093 px**, also 30 px Reserve zur Grenze. Kennzahlen unveraendert.
+
 **Das ist kein Praezedenzfall fuer Layout-Aenderungen.** Es war eine einmalige,
 dokumentierte Revision gegen eine Renderer-Regression, ausdruecklich vom
 Eigentuemer des Repos beauftragt. Mit den neuen Werten ist die Vorlage erneut

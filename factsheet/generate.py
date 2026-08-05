@@ -257,10 +257,11 @@ h1 { font-size:21px; font-weight:800; letter-spacing:-.3px; }
 .kpi-side .big { font-size:13px;color:#48566a;line-height:1.5; }
 .kpi-side .big b { color:#1c2733; }
 .pill { display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-top:6px; }
-.mini { display:flex;gap:10px;margin-top:7px; }
-.mini div { flex:1;text-align:center;background:#fff;border:1px solid #e9eef4;border-radius:8px;padding:7px 4px; }
+.mini { display:flex;gap:6px;margin-top:7px; }
+.mini div { flex:1;text-align:center;background:#fff;border:1px solid #e9eef4;border-radius:8px;padding:7px 3px; }
 .mini .v { font-size:17px;font-weight:800;color:#1b4f8a; }
-.mini .l { font-size:9.5px;color:#6a7684;text-transform:uppercase;letter-spacing:.4px;margin-top:1px; }
+.mini .l { font-size:8.5px;color:#6a7684;text-transform:uppercase;letter-spacing:0;
+  margin-top:1px;white-space:nowrap; }
 .hist { width:100%;height:auto; }
 .hbar-val { font-size:12px;font-weight:700;text-anchor:middle;fill:#48566a; }
 .hbar-lab { font-size:10px;fill:#6a7684;text-anchor:middle; }
@@ -324,9 +325,9 @@ h1 { font-size:21px; font-weight:800; letter-spacing:-.3px; }
       </div>
     </div>
     <div class="mini">
-      <div><div class="v">{dn(s['lt5_pct'],0)}%</div><div class="l">&lt; 5 Min.</div></div>
-      <div><div class="v">{dn(s['gt5_pct'],0)}%</div><div class="l">&gt; 5 Min. Versp.</div></div>
-      <div><div class="v">{dn(s['gt15_pct'],0)}%</div><div class="l">&gt; 15 Min. Versp.</div></div>
+      <div><div class="v">{dn(s['lt5_pct'],0)}%</div><div class="l">unter 5 Min.</div></div>
+      <div><div class="v">{dn(s['gt5_pct'],0)}%</div><div class="l">&uuml;ber 5 Min.</div></div>
+      <div><div class="v">{dn(s['gt15_pct'],0)}%</div><div class="l">&uuml;ber 15 Min.</div></div>
       <div><div class="v">{dn(s['p90'],0)}</div><div class="l">p90 (Min.)</div></div>
     </div>
   </div>
