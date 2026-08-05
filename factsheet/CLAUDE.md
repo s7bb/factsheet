@@ -12,7 +12,8 @@ Wenn du (Claude Code) in diesem Repo laeufst, ist dein Ziel:
 1. Das Monatsdatenblatt **und** das Schulweg-Datenblatt fuer den zuletzt
    abgeschlossenen Kalendermonat erzeugen.
 2. Pruefen, dass beide Ergebnisse korrekt und je einseitig sind.
-3. Beide PDFs nach `output/` committen.
+3. Die PDFs **nicht** committen - `factsheet/output/` ist gitignoriert. Die
+   Veroeffentlichung uebernimmt der Workflow als GitHub-Release.
 
 Der eigentliche Aufbau ist **deterministisch** und steckt in `generate.py`
 (Monatsdatenblatt) und `schulweg.py` (Schulweg-Datenblatt). Du sollst die
@@ -40,13 +41,10 @@ Das erzeugt:
 `schulweg.py` laeuft im Standardablauf und im Workflow immer **nach**
 `generate.py`, nie davor.
 
-Danach:
-
-```bash
-git add output/
-git commit -m "Datenblaetter <Monat> <Jahr>"
-git push
-```
+Die erzeugten PDFs werden **nicht committet** - `factsheet/output/` ist
+gitignoriert. Der Workflow veroeffentlicht beide Dateien als Assets eines
+GitHub-Releases mit Tag `MM.YYYY`. Lokal erzeugte PDFs sind Wegwerf-Artefakte
+und jederzeit reproduzierbar.
 
 ## Feste Vorlage: Monatsdatenblatt (unveraenderlich)
 

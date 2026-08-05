@@ -28,7 +28,7 @@ All output is in German. Number formatting is German (thousands `.`, decimal `,`
     ├── requirements-dev.txt    # requirements.txt plus pytest
     ├── pytest.ini
     ├── tests/             # offline pytest suite (calendar, slots, metrics, HTML)
-    └── output/            # generated PDFs (committed by the workflow)
+    └── output/            # generated PDFs (gitignored, published as release assets)
 ```
 
 The workflow lives at the repo root because GitHub Actions only detects

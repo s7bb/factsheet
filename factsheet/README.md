@@ -26,7 +26,7 @@ Im Repo unter `factsheet/`, der Workflow liegt an der Repo-Wurzel
     ├── pytest.ini
     ├── tests/                                 # Offline-Tests (Kalender, Slots, Kennzahlen, HTML)
     ├── README.md
-    └── output/                               # erzeugte PDFs (vom Workflow committet)
+    └── output/                               # erzeugte PDFs (gitignoriert, Release-Assets)
 ```
 
 ## Lokal ausfuehren
