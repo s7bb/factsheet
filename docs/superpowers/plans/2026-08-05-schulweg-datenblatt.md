@@ -6,7 +6,9 @@
 
 **Architecture:** A new self-contained `factsheet/schulweg.py` imports pure helpers from `generate.py` (`load_month`, `dth`, `dn`, `render_pdf`, `MONATE`, `MONATE_DATEI`, `TZ`) and adds its own calendar logic, metric computation, SVG builders and HTML template. `generate.py` is not modified. A new pytest suite covers everything except PDF rendering, which is verified by the existing one-A4-page height check.
 
-**Tech Stack:** Python 3.12+, pandas, Playwright/Chromium, pytest. No new runtime dependencies.
+**Tech Stack:** Python 3.12+, pandas, Playwright/Chromium, pytest. No new packages;
+the only new runtime dependency is the OpenHolidays REST API, which is optional by
+design (a committed table covers its absence).
 
 **Spec:** `docs/superpowers/specs/2026-08-05-schulweg-datenblatt-design.md`
 
@@ -20,7 +22,10 @@
 - **Filename:** `output/S7_Baierbrunn_<Monat><Jahr>_Schulweg.pdf`, month spelled out, `Maerz` not `März` (use `MONATE_DATEI`).
 - **Root wrapper must be `<div class="page">`** — `generate.py:401` runs `document.querySelector(".page").scrollHeight`.
 - **CSS must carry** `@page { size: A4; margin: 0 }` and `body { width: 210mm }`, matching `generate.py:234-236`.
-- **Only network target:** `raw.githubusercontent.com/s7bb/...`. Unit tests must not hit the network.
+- **Network targets:** `raw.githubusercontent.com/s7bb/...` (required) and
+  `openholidaysapi.org` (optional; failure must fall back to the committed table,
+  never abort). Unit tests must not hit the network - the drift test is marked
+  `network` and excluded with `-m "not network"`.
 - **Window:** scheduled arrival at Baierbrunn, local minute-of-day 390–510 inclusive (06:30–08:30).
 - **Directions:** only `direction_bucket` in `("wolfratshausen", "muenchen")`.
 - **Palette (copied, not imported):** `#1b4f8a` primary, `#2e9e5b` green, `#f0902f` orange, `#c8371f` red, `#e2e8ef` border, `#6a7684` muted, `#fbfcfd` card background.
@@ -173,44 +178,223 @@ git commit -m "feat: add Bavarian public holiday calculation for Schulweg sheet"
 
 ---
 
-### Task 2: School-holiday table and school-day resolution
+### Task 2: School holidays from OpenHolidays, with a committed fallback table
 
 **Files:**
+- Create: `factsheet/tools/refresh_ferien.py`
+- Create: `factsheet/pytest.ini`
 - Modify: `factsheet/schulweg.py`
 - Modify: `factsheet/tests/test_kalender.py`
 
 **Interfaces:**
 - Consumes: `feiertage(year)` from Task 1.
 - Produces:
-  - `FERIEN: list[tuple[str, str]]` — inclusive `("YYYY-MM-DD", "YYYY-MM-DD")` ranges.
-  - `FERIEN_ABGEDECKT: tuple[str, str]` — inclusive coverage window.
-  - `ist_ferientag(day: datetime.date) -> bool`
-  - `pruefe_abdeckung(month: str) -> None` — raises `SystemExit` if `month` (`"YYYY-MM"`) is not fully covered.
-  - `tage_im_monat(month: str) -> tuple[list[datetime.date], bool]` — returns `(days, fallback)`. `days` is the school days in the month; if there are none it is every Mon–Fri in the month and `fallback` is `True`.
+  - `FERIEN: list[tuple[str, str]]` — inclusive `("YYYY-MM-DD", "YYYY-MM-DD")` ranges, generated, never hand-typed.
+  - `FERIEN_ABGEDECKT: tuple[str, str]` — inclusive coverage window for the fallback path.
+  - `ferien_api(von: str, bis: str) -> list[tuple[str, str]] | None` — `None` on failure *or* implausible response.
+  - `ferien_ranges(year: int) -> tuple[list[tuple[str, str]], str]` — `(ranges, quelle)`.
+  - `ist_ferientag(day: datetime.date, ranges) -> bool`
+  - `pruefe_abdeckung(month: str) -> None` — raises `SystemExit` if `month` is not fully covered.
+  - `tage_im_monat(month: str) -> tuple[list[datetime.date], bool, str]` — `(days, fallback, quelle)`.
 
-- [ ] **Step 1: Obtain and verify the official holiday dates**
+**Note for Tasks 4 and 6:** `tage_im_monat` returns **three** values. `quelle` is
+a human-readable source label that must reach the rendered sheet.
 
-The dates below are a **starting point that must be checked before committing**.
-Open <https://www.km.bayern.de/schulferien> (Bayerisches Staatsministerium für
-Unterricht und Kultus) and confirm every range for school years 2025/26 and
-2026/27. Correct any that differ. Do not skip this step and do not transcribe
-from memory — a wrong range silently mislabels days as `Schultage`.
+- [ ] **Step 1: Understand where these dates came from**
 
-Anchor to check first: Sommerferien 2026 must be **2026-08-03 – 2026-09-14**.
-Task 6 depends on August 2026 containing zero school days.
+The table in Step 3 is **not** a guess — it was extracted on 2026-08-05 from
+<https://www.schulferien.org/deutschland/ferien/bayern/> and its per-holiday
+subpages (`/ferien/ostern/bayern/`, `/pfingsten/`, `/winter/`, `/sommer/`,
+`/herbst/`, `/weihnachten/`). Every range below was read from **two** separate
+pages and agreed on both.
 
-Bayern is the only state handled. `Buß- und Bettag` is not a public holiday in
-Bavaria but schools are closed, so it appears in `FERIEN`, not in `feiertage()`.
+Two things worth knowing before you touch it:
 
-- [ ] **Step 2: Write the failing test**
+- **`schulferien.org` is a secondary source.** The official publisher is the
+  Bayerisches Staatsministerium für Unterricht und Kultus.
+  `https://www.km.bayern.de/schulferien` returned HTTP 404 on 2026-08-05, so the
+  official page was not reachable for cross-checking. If you can reach an
+  official StMUK page, re-confirm the table against it.
+- **Extraction from that site is not perfectly reliable.** Two pages disagreed
+  about dates in early 2025 (Osterferien reported as 25.03.–06.04.2025, which
+  cannot be right — Easter 2025 was 20 April). Those years fall outside the
+  coverage window and are not in the table, but it is why every used value was
+  confirmed twice.
+
+Every one of those values was then confirmed a third time against the
+OpenHolidays API, which returned the identical 18 periods — including
+Buß- und Bettag as ordinary single-day School periods (19.11.2025, 18.11.2026,
+17.11.2027) and the corrected Weihnachtsferien start.
+
+`Buß- und Bettag` therefore needs no special handling: it arrives from the API
+like any other period and is stored the same way, so the API path and the
+fallback path produce the identical data shape.
+
+Bayern is the only state handled.
+
+- [ ] **Step 2: Create the table generator and the pytest marker config**
+
+`factsheet/tools/refresh_ferien.py`:
+
+```python
+#!/usr/bin/env python3
+"""Erzeugt den FERIEN-Block fuer schulweg.py aus der OpenHolidays-API.
+
+Aufruf:  python tools/refresh_ferien.py --von 2025-08-01 --bis 2028-01-31
+
+Gibt den Block auf stdout aus. Inhalt in schulweg.py ersetzen und committen.
+Die Tabelle wird nie von Hand getippt: genau das hat beim Entwurf ein falsches
+Startdatum der Weihnachtsferien 2026/27 erzeugt (23.12. statt 24.12.).
+
+Das Abfragefenster der API ist auf drei Jahre begrenzt.
+"""
+import argparse
+import json
+import urllib.parse
+import urllib.request
+
+API = "https://openholidaysapi.org/SchoolHolidays"
+
+
+def _name(eintrag):
+    for n in eintrag.get("name", []):
+        if n.get("language") == "DE":
+            return n["text"]
+    return "?"
+
+
+def hole(von, bis):
+    query = urllib.parse.urlencode({
+        "countryIsoCode": "DE",
+        "subdivisionCode": "DE-BY",
+        "languageIsoCode": "DE",
+        "validFrom": von,
+        "validTo": bis,
+    })
+    with urllib.request.urlopen(f"{API}?{query}", timeout=30) as r:
+        return json.load(r)
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="FERIEN-Block fuer schulweg.py erzeugen.")
+    ap.add_argument("--von", required=True, help="YYYY-MM-DD")
+    ap.add_argument("--bis", required=True, help="YYYY-MM-DD (max. 3 Jahre)")
+    args = ap.parse_args()
+
+    eintraege = sorted(
+        (e["startDate"], e["endDate"], _name(e))
+        for e in hole(args.von, args.bis) if e.get("type") == "School")
+
+    print("# Erzeugt mit tools/refresh_ferien.py aus der OpenHolidays-API.")
+    print("# Nicht von Hand bearbeiten - Skript erneut laufen lassen.")
+    print("FERIEN = [")
+    for start, ende, name in eintraege:
+        print(f'    ("{start}", "{ende}"),   # {name}')
+    print("]")
+    print(f'FERIEN_ABGEDECKT = ("{args.von}", "{args.bis}")')
+
+
+if __name__ == "__main__":
+    main()
+```
+
+`factsheet/pytest.ini`:
+
+```ini
+[pytest]
+markers =
+    network: geht ins Netz (OpenHolidays-API); mit -m "not network" ueberspringen.
+```
+
+- [ ] **Step 3: Generate the table**
+
+```bash
+cd factsheet
+python tools/refresh_ferien.py --von 2025-08-01 --bis 2028-01-31
+```
+
+Expected output — paste this verbatim into `schulweg.py` in Step 6. It was
+captured on 2026-08-05 and matches `schulferien.org` on every entry:
+
+```python
+# Erzeugt mit tools/refresh_ferien.py aus der OpenHolidays-API.
+# Nicht von Hand bearbeiten - Skript erneut laufen lassen.
+FERIEN = [
+    ("2025-08-01", "2025-09-15"),   # Sommerferien
+    ("2025-11-03", "2025-11-07"),   # Herbstferien
+    ("2025-11-19", "2025-11-19"),   # Buß- und Bettag
+    ("2025-12-22", "2026-01-05"),   # Weihnachtsferien
+    ("2026-02-16", "2026-02-20"),   # Frühjahrsferien
+    ("2026-03-30", "2026-04-10"),   # Osterferien
+    ("2026-05-26", "2026-06-05"),   # Pfingstferien
+    ("2026-08-03", "2026-09-14"),   # Sommerferien
+    ("2026-11-02", "2026-11-06"),   # Herbstferien
+    ("2026-11-18", "2026-11-18"),   # Buß- und Bettag
+    ("2026-12-24", "2027-01-08"),   # Weihnachtsferien
+    ("2027-02-08", "2027-02-12"),   # Frühjahrsferien
+    ("2027-03-22", "2027-04-02"),   # Osterferien
+    ("2027-05-18", "2027-05-28"),   # Pfingstferien
+    ("2027-08-02", "2027-09-13"),   # Sommerferien
+    ("2027-11-02", "2027-11-05"),   # Herbstferien
+    ("2027-11-17", "2027-11-17"),   # Buß- und Bettag
+    ("2027-12-24", "2028-01-07"),   # Weihnachtsferien
+]
+FERIEN_ABGEDECKT = ("2025-08-01", "2028-01-31")
+```
+
+If the generated output differs, **use the freshly generated version** and note
+the difference in the commit message — upstream data changed.
+
+The coverage window stops at 2028-01-31 on purpose: Frühjahrsferien 2028 and
+everything after it are not in this range, so February 2028 onwards must not be
+rendered from the table.
+
+- [ ] **Step 4: Write the failing test**
 
 Append to `factsheet/tests/test_kalender.py`:
 
 ```python
+import json
+
 import pytest
 
-from schulweg import (FERIEN, FERIEN_ABGEDECKT, ist_ferientag, pruefe_abdeckung,
-                      tage_im_monat)
+import schulweg
+from schulweg import (FERIEN, FERIEN_ABGEDECKT, MIN_FERIEN_PRO_JAHR,
+                      QUELLE_API, ferien_api, ferien_ranges, ist_ferientag,
+                      pruefe_abdeckung, tage_im_monat)
+
+
+class FakeResponse:
+    """Minimales Stand-in fuer urllib.request.urlopen."""
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    def read(self):
+        return json.dumps(self._payload).encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+def fake_api(payload):
+    return lambda url, timeout=None: FakeResponse(payload)
+
+
+def school_entries(count):
+    return [{"type": "School",
+             "startDate": f"2026-01-{i + 1:02d}",
+             "endDate": f"2026-01-{i + 1:02d}"}
+            for i in range(count)]
+
+
+def kein_netz(monkeypatch):
+    """Erzwingt den Tabellen-Pfad, damit Tests offline deterministisch sind."""
+    monkeypatch.setattr(schulweg, "ferien_api", lambda von, bis: None)
 
 
 def test_ferien_table_is_sorted_and_disjoint():
@@ -225,14 +409,79 @@ def test_ferien_table_within_coverage():
     lo, hi = (dt.date.fromisoformat(x) for x in FERIEN_ABGEDECKT)
     for a, b in FERIEN:
         assert lo <= dt.date.fromisoformat(a)
-        assert dt.date.fromisoformat(b) <= hi
 
 
-def test_sommerferien_2026_anchor():
-    assert ist_ferientag(dt.date(2026, 8, 3))
-    assert ist_ferientag(dt.date(2026, 9, 14))
-    assert not ist_ferientag(dt.date(2026, 7, 31))
-    assert not ist_ferientag(dt.date(2026, 9, 15))
+def test_weihnachtsferien_2026_start_on_the_24th():
+    """Beim Entwurf stand hier faelschlich der 23.12. - festgenagelt."""
+    assert ("2026-12-24", "2027-01-08") in FERIEN
+
+
+def test_api_returns_none_on_network_error(monkeypatch):
+    def boom(url, timeout=None):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(schulweg.urllib.request, "urlopen", boom)
+    assert ferien_api("2026-01-01", "2026-12-31") is None
+
+
+def test_api_returns_none_on_empty_response(monkeypatch):
+    """HTTP 200 mit leerer Liste ist gefaehrlicher als ein Netzfehler:
+    ohne diese Pruefung waere jeder Werktag ein Schultag."""
+    monkeypatch.setattr(schulweg.urllib.request, "urlopen", fake_api([]))
+    assert ferien_api("2026-01-01", "2026-12-31") is None
+
+
+def test_api_returns_none_on_truncated_response(monkeypatch):
+    monkeypatch.setattr(schulweg.urllib.request, "urlopen",
+                        fake_api(school_entries(MIN_FERIEN_PRO_JAHR - 1)))
+    assert ferien_api("2026-01-01", "2026-12-31") is None
+
+
+def test_api_returns_none_on_malformed_entries(monkeypatch):
+    monkeypatch.setattr(schulweg.urllib.request, "urlopen",
+                        fake_api([{"type": "School"}] * 7))
+    assert ferien_api("2026-01-01", "2026-12-31") is None
+
+
+def test_api_accepts_a_plausible_response(monkeypatch):
+    monkeypatch.setattr(schulweg.urllib.request, "urlopen",
+                        fake_api(school_entries(MIN_FERIEN_PRO_JAHR)))
+    result = ferien_api("2026-01-01", "2026-12-31")
+    assert result is not None
+    assert len(result) == MIN_FERIEN_PRO_JAHR
+    assert result == sorted(result)
+
+
+def test_api_ignores_non_school_entries(monkeypatch):
+    payload = school_entries(MIN_FERIEN_PRO_JAHR) + [
+        {"type": "Public", "startDate": "2026-05-01", "endDate": "2026-05-01"}]
+    monkeypatch.setattr(schulweg.urllib.request, "urlopen", fake_api(payload))
+    assert len(ferien_api("2026-01-01", "2026-12-31")) == MIN_FERIEN_PRO_JAHR
+
+
+def test_ferien_ranges_labels_the_api_source(monkeypatch):
+    monkeypatch.setattr(schulweg, "ferien_api",
+                        lambda von, bis: [("2026-08-03", "2026-09-14")])
+    ranges, quelle = ferien_ranges(2026)
+    assert quelle == QUELLE_API
+    assert ranges == [("2026-08-03", "2026-09-14")]
+
+
+def test_ferien_ranges_labels_the_fallback_source(monkeypatch):
+    kein_netz(monkeypatch)
+    ranges, quelle = ferien_ranges(2026)
+    assert quelle != QUELLE_API
+    assert "Tabelle" in quelle
+    assert ranges == [tuple(r) for r in FERIEN]
+
+
+def test_sommerferien_2026_anchor(monkeypatch):
+    kein_netz(monkeypatch)
+    ranges, _ = ferien_ranges(2026)
+    assert ist_ferientag(dt.date(2026, 8, 3), ranges)
+    assert ist_ferientag(dt.date(2026, 9, 14), ranges)
+    assert not ist_ferientag(dt.date(2026, 7, 31), ranges)
+    assert not ist_ferientag(dt.date(2026, 9, 15), ranges)
 
 
 def test_coverage_guard_rejects_uncovered_month():
@@ -241,68 +490,147 @@ def test_coverage_guard_rejects_uncovered_month():
     pruefe_abdeckung("2026-07")  # must not raise
 
 
-def test_july_2026_has_23_school_days():
-    days, fallback = tage_im_monat("2026-07")
+def test_coverage_guard_is_skipped_when_the_api_answers(monkeypatch):
+    """Ausserhalb der Tabelle, aber die API antwortet - kein Abbruch."""
+    monkeypatch.setattr(schulweg, "ferien_api",
+                        lambda von, bis: [("2035-08-01", "2035-09-10")])
+    days, fallback, quelle = tage_im_monat("2035-01")
+    assert quelle == QUELLE_API
+    assert len(days) > 0
+
+
+def test_uncovered_month_without_api_aborts(monkeypatch):
+    kein_netz(monkeypatch)
+    with pytest.raises(SystemExit):
+        tage_im_monat("2035-01")
+
+
+def test_july_2026_has_23_school_days(monkeypatch):
+    kein_netz(monkeypatch)
+    days, fallback, _ = tage_im_monat("2026-07")
     assert fallback is False
     assert len(days) == 23
     assert all(d.weekday() < 5 for d in days)
 
 
-def test_august_2026_falls_back_to_werktage():
-    days, fallback = tage_im_monat("2026-08")
+def test_august_2026_falls_back_to_werktage(monkeypatch):
+    kein_netz(monkeypatch)
+    days, fallback, _ = tage_im_monat("2026-08")
     assert fallback is True
     assert len(days) == 21          # Mon-Fri in August 2026
     assert dt.date(2026, 8, 17) in days
 
 
-def test_school_days_exclude_public_holidays():
-    days, fallback = tage_im_monat("2026-06")
+def test_school_days_exclude_public_holidays(monkeypatch):
+    kein_netz(monkeypatch)
+    days, fallback, _ = tage_im_monat("2026-06")
     assert fallback is False
     assert dt.date(2026, 6, 4) not in days     # Fronleichnam
     assert dt.date(2026, 6, 8) in days         # first day after Pfingstferien
+
+
+def test_buss_und_bettag_is_not_a_school_day(monkeypatch):
+    kein_netz(monkeypatch)
+    days, _, _ = tage_im_monat("2026-11")
+    assert dt.date(2026, 11, 18) not in days   # Buss- und Bettag
+    assert dt.date(2026, 11, 19) in days       # Donnerstag danach
+
+
+@pytest.mark.network
+def test_live_api_matches_the_committed_table():
+    """Faengt Drift zwischen beiden Pfaden ab, bevor sie in ein PDF geraet."""
+    von, bis = FERIEN_ABGEDECKT
+    live = ferien_api(von, bis)
+    assert live is not None, "OpenHolidays nicht erreichbar"
+    assert live == [tuple(r) for r in FERIEN]
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [ ] **Step 5: Run the test to verify it fails**
 
-Run: `cd factsheet && python -m pytest tests/test_kalender.py -v`
+Run: `cd factsheet && python -m pytest tests/test_kalender.py -v -m "not network"`
 Expected: FAIL — `ImportError: cannot import name 'FERIEN'`
 
-- [ ] **Step 4: Write the minimal implementation**
+- [ ] **Step 6: Write the minimal implementation**
 
-Append to `factsheet/schulweg.py`, after `feiertage`:
+Add to the imports at the top of `factsheet/schulweg.py`:
 
 ```python
-# Bayerische Schulferien, einschliesslich schulfreier Tage, die keine
-# gesetzlichen Feiertage sind (z. B. Buss- und Bettag).
-# Quelle: Bayerisches Staatsministerium fuer Unterricht und Kultus,
-# https://www.km.bayern.de/schulferien
-# Vor jeder Erweiterung gegen die offizielle Veroeffentlichung pruefen.
-FERIEN = [
-    ("2025-11-03", "2025-11-07"),   # Herbstferien 2025
-    ("2025-11-19", "2025-11-19"),   # Buss- und Bettag
-    ("2025-12-22", "2026-01-05"),   # Weihnachtsferien
-    ("2026-02-16", "2026-02-20"),   # Fruehjahrsferien
-    ("2026-03-30", "2026-04-10"),   # Osterferien
-    ("2026-05-26", "2026-06-05"),   # Pfingstferien
-    ("2026-08-03", "2026-09-14"),   # Sommerferien
-    ("2026-11-02", "2026-11-06"),   # Herbstferien 2026
-    ("2026-11-18", "2026-11-18"),   # Buss- und Bettag
-    ("2026-12-23", "2027-01-08"),   # Weihnachtsferien
-    ("2027-02-08", "2027-02-12"),   # Fruehjahrsferien
-    ("2027-03-22", "2027-04-02"),   # Osterferien
-    ("2027-05-18", "2027-05-28"),   # Pfingstferien
-    ("2027-08-02", "2027-09-13"),   # Sommerferien
-]
+import json
+import sys
+import urllib.parse
+import urllib.request
+```
 
-# Zeitraum, fuer den FERIEN vollstaendig gepflegt ist. Ausserhalb bricht das
-# Skript ab, statt Ferientage stillschweigend als Schultage zu zaehlen.
-FERIEN_ABGEDECKT = ("2025-08-01", "2027-07-31")
+Then append, pasting the `FERIEN` block generated in Step 3:
+
+```python
+API_SCHULFERIEN = "https://openholidaysapi.org/SchoolHolidays"
+
+# Bayern hat sieben Ferienzeitraeume pro Jahr (inkl. Buss- und Bettag). Eine
+# Antwort mit weniger als fuenf gilt als unplausibel: ein HTTP 200 mit leerer
+# Liste wuerde sonst jeden Werktag zum Schultag machen, und das PDF saehe dabei
+# voellig normal aus.
+MIN_FERIEN_PRO_JAHR = 5
+
+QUELLE_API = "OpenHolidays API"
+FERIEN_STAND = "2026-08-05"
+QUELLE_TABELLE = f"hinterlegte Tabelle (Stand {FERIEN_STAND})"
+
+# <<< FERIEN-Block aus Schritt 3 hier einfuegen >>>
 
 
-def ist_ferientag(day):
-    """True, wenn der Tag in einem bayerischen Schulferien-Zeitraum liegt."""
+def ferien_api(von, bis, timeout=15):
+    """Bayerische Schulferien von OpenHolidays.
+
+    Gibt None zurueck, wenn die Abfrage fehlschlaegt ODER die Antwort
+    unplausibel ist. Beides fuehrt zum Tabellen-Fallback."""
+    query = urllib.parse.urlencode({
+        "countryIsoCode": "DE",
+        "subdivisionCode": "DE-BY",
+        "languageIsoCode": "DE",
+        "validFrom": von,
+        "validTo": bis,
+    })
+    try:
+        with urllib.request.urlopen(f"{API_SCHULFERIEN}?{query}", timeout=timeout) as r:
+            data = json.load(r)
+    except Exception as e:
+        print(f"WARNUNG: OpenHolidays nicht erreichbar ({e}) - "
+              f"{QUELLE_TABELLE} wird verwendet.", file=sys.stderr)
+        return None
+
+    try:
+        ranges = sorted((e["startDate"], e["endDate"]) for e in data
+                        if e.get("type") == "School")
+    except (AttributeError, KeyError, TypeError) as e:
+        print(f"WARNUNG: Unerwartete Antwort von OpenHolidays ({e}) - "
+              f"{QUELLE_TABELLE} wird verwendet.", file=sys.stderr)
+        return None
+
+    if len(ranges) < MIN_FERIEN_PRO_JAHR:
+        print(f"WARNUNG: OpenHolidays liefert nur {len(ranges)} Ferienzeitraeume "
+              f"fuer {von}..{bis} (mindestens {MIN_FERIEN_PRO_JAHR} erwartet) - "
+              f"{QUELLE_TABELLE} wird verwendet.", file=sys.stderr)
+        return None
+    return ranges
+
+
+def ferien_ranges(year):
+    """(Zeitraeume, Quellenbezeichnung) fuer ein Kalenderjahr.
+
+    Eine Jahresabfrage liefert auch die Weihnachtsferien, die im Dezember
+    beginnen und ins Folgejahr laufen - die API gibt jeden Zeitraum zurueck,
+    der das Fenster ueberschneidet."""
+    aus_api = ferien_api(f"{year}-01-01", f"{year}-12-31")
+    if aus_api is not None:
+        return aus_api, QUELLE_API
+    return [tuple(r) for r in FERIEN], QUELLE_TABELLE
+
+
+def ist_ferientag(day, ranges):
+    """True, wenn der Tag in einem der Ferienzeitraeume liegt."""
     return any(dt.date.fromisoformat(a) <= day <= dt.date.fromisoformat(b)
-               for a, b in FERIEN)
+               for a, b in ranges)
 
 
 def _monatsgrenzen(month):
@@ -313,23 +641,32 @@ def _monatsgrenzen(month):
 
 
 def pruefe_abdeckung(month):
-    """Bricht ab, wenn der Monat nicht vollstaendig von FERIEN abgedeckt ist."""
+    """Bricht ab, wenn der Monat nicht vollstaendig von FERIEN abgedeckt ist.
+    Gilt nur fuer den Tabellen-Fallback; antwortet die API, ist die Tabelle
+    nicht im Spiel."""
     first, last = _monatsgrenzen(month)
     lo, hi = (dt.date.fromisoformat(x) for x in FERIEN_ABGEDECKT)
     if first < lo or last > hi:
         raise SystemExit(
-            f"FEHLER: {month} liegt ausserhalb des gepflegten Ferienzeitraums "
-            f"{FERIEN_ABGEDECKT[0]}..{FERIEN_ABGEDECKT[1]}. "
-            f"FERIEN in schulweg.py gegen die offizielle Veroeffentlichung "
-            f"des StMUK ergaenzen."
+            f"FEHLER: OpenHolidays nicht verfuegbar und {month} liegt "
+            f"ausserhalb der hinterlegten Ferientabelle "
+            f"({FERIEN_ABGEDECKT[0]}..{FERIEN_ABGEDECKT[1]}). "
+            f"Tabelle mit tools/refresh_ferien.py erneuern."
         )
 
 
 def tage_im_monat(month):
-    """Schultage des Monats. Gibt es keine (Ferienmonat), werden alle Werktage
-    zurueckgegeben; das zweite Element des Tupels zeigt diesen Fallback an."""
-    pruefe_abdeckung(month)
+    """Schultage des Monats plus Quellenangabe.
+
+    Gibt es keine Schultage (reiner Ferienmonat), werden alle Werktage
+    zurueckgegeben; das zweite Element zeigt diesen Fallback an. Ein
+    Kalendermonat liegt immer in genau einem Jahr, daher genuegt ein
+    Jahresaufruf."""
     first, last = _monatsgrenzen(month)
+    ranges, quelle = ferien_ranges(first.year)
+    if quelle != QUELLE_API:
+        pruefe_abdeckung(month)
+
     werktage = []
     day = first
     while day <= last:
@@ -337,26 +674,37 @@ def tage_im_monat(month):
             werktage.append(day)
         day += dt.timedelta(days=1)
 
-    frei = feiertage(first.year) | feiertage(last.year)
-    schultage = [d for d in werktage if d not in frei and not ist_ferientag(d)]
+    frei = feiertage(first.year)
+    schultage = [d for d in werktage
+                 if d not in frei and not ist_ferientag(d, ranges)]
     if schultage:
-        return schultage, False
-    return werktage, True
+        return schultage, False, quelle
+    return werktage, True, quelle
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [ ] **Step 7: Run the tests to verify they pass**
 
-Run: `cd factsheet && python -m pytest tests/test_kalender.py -v`
-Expected: 11 passed
+Run: `cd factsheet && python -m pytest tests/test_kalender.py -v -m "not network"`
+Expected: 23 passed
 
 If `test_july_2026_has_23_school_days` or `test_august_2026_falls_back_to_werktage`
-fails, the `FERIEN` table from Step 1 is wrong — fix the table, not the test.
+fails, the `FERIEN` block was pasted wrong — re-run Step 3, do not edit the test.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Run the drift test against the live API**
+
+Run: `cd factsheet && python -m pytest tests/test_kalender.py -v -m network`
+Expected: 1 passed.
+
+A failure here means upstream changed since 2026-08-05. Re-run Step 3, paste the
+new block, bump `FERIEN_STAND`, and say so in the commit message. Never edit the
+table by hand to make this pass.
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add factsheet/schulweg.py factsheet/tests/test_kalender.py
-git commit -m "feat: resolve Bavarian school days with coverage guard and Werktage fallback"
+git add factsheet/schulweg.py factsheet/tests/test_kalender.py \
+        factsheet/tools/refresh_ferien.py factsheet/pytest.ini
+git commit -m "feat: resolve school days from OpenHolidays with a committed fallback table"
 ```
 
 ---
@@ -516,7 +864,7 @@ git commit -m "feat: derive morning slot centres from data instead of a fixed an
   - `RICHTUNGEN = ("wolfratshausen", "muenchen")`
   - `kennzahlen(rows: pandas.DataFrame) -> dict` with keys `n, canc, avail, ontime, avg, gt5, p90`; every value except `n` and `canc` is `None` when the sample is empty.
   - `compute_schulweg(df: pandas.DataFrame, month: str) -> dict` with keys
-    `days, fallback, centres, win, mon, slots, daily, warnungen`.
+    `days, fallback, quelle, centres, win, mon, slots, daily, warnungen`.
   - `slots` is a list of exactly 6 dicts: `{"label": str, "dirs": {richtung: kennzahlen}}`.
 
 - [ ] **Step 1: Write the failing test**
@@ -530,9 +878,17 @@ import zoneinfo
 import pandas as pd
 import pytest
 
+import schulweg
 from schulweg import compute_schulweg, kennzahlen
 
 TZ = zoneinfo.ZoneInfo("Europe/Berlin")
+
+
+@pytest.fixture(autouse=True)
+def kein_netz(monkeypatch):
+    """compute_schulweg ruft tage_im_monat, das sonst OpenHolidays abfragen
+    wuerde. Unit-Tests bleiben offline und deterministisch."""
+    monkeypatch.setattr(schulweg, "ferien_api", lambda von, bis: None)
 
 
 SPALTEN = ["scheduled_time", "local", "date", "direction_bucket",
@@ -683,6 +1039,12 @@ def test_fallback_month_uses_werktage():
     s = compute_schulweg(df, "2026-08")
     assert s["fallback"] is True
     assert s["win"]["muenchen"]["n"] == 1
+
+
+def test_ferien_source_is_carried_through_to_the_sheet():
+    df = make_df([(dt.date(2026, 7, 1), 400, "muenchen", 2.0)])
+    s = compute_schulweg(df, "2026-07")
+    assert "Tabelle" in s["quelle"]      # kein_netz-Fixture erzwingt Fallback
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -720,7 +1082,7 @@ def kennzahlen(rows):
 
 def compute_schulweg(df, month):
     """Alle Kennzahlen des Schulweg-Datenblatts."""
-    tage, fallback = tage_im_monat(month)
+    tage, fallback, quelle = tage_im_monat(month)
     tage_set = set(tage)
 
     d = df[df["direction_bucket"].isin(RICHTUNGEN)].copy()
@@ -757,7 +1119,8 @@ def compute_schulweg(df, month):
         daily = {day: float(v) for day, v in means.sort_index().items()}
 
     return {
-        "days": len(tage), "fallback": fallback, "centres": centres,
+        "days": len(tage), "fallback": fallback, "quelle": quelle,
+        "centres": centres,
         "win": {r: kennzahlen(fenster[fenster["direction_bucket"] == r])
                 for r in RICHTUNGEN},
         "mon": {r: kennzahlen(d[d["direction_bucket"] == r])
@@ -769,12 +1132,12 @@ def compute_schulweg(df, month):
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd factsheet && python -m pytest tests/test_stats.py -v`
-Expected: 13 passed
+Expected: 14 passed
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd factsheet && python -m pytest tests/ -v`
-Expected: 33 passed
+Run: `cd factsheet && python -m pytest tests/ -v -m "not network"`
+Expected: 46 passed
 
 - [ ] **Step 6: Commit**
 
@@ -955,7 +1318,7 @@ def empty_stats(fallback=False):
         "slots": [{"label": "–",
                    "dirs": {"wolfratshausen": dict(leer), "muenchen": dict(leer)}}
                   for _ in range(6)],
-        "daily": {}, "warnungen": [],
+        "daily": {}, "warnungen": [], "quelle": "OpenHolidays API",
     }
 
 
@@ -991,6 +1354,14 @@ def test_fallback_month_is_labelled_in_the_header():
     html = render_html_schulweg(empty_stats(fallback=True), "August", 2026, "2026-08")
     assert "Werktage" in html
     assert "keine Schultage" in html
+
+
+def test_ferien_source_is_named_on_the_sheet():
+    """Ein Rueckfall auf die Tabelle darf nie unsichtbar sein."""
+    s = empty_stats()
+    s["quelle"] = "hinterlegte Tabelle (Stand 2026-08-05)"
+    html = render_html_schulweg(s, "Juli", 2026, "2026-07")
+    assert "hinterlegte Tabelle (Stand 2026-08-05)" in html
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1178,7 +1549,8 @@ def render_html_schulweg(s, month_label, year, archive_month):
 </div>
 
 <div class="foot">
-  <span>Quelle: s7bb-data (github.com/s7bb/s7bb-data) &middot; archive/{archive_month}.json</span>
+  <span>Quelle: s7bb-data (github.com/s7bb/s7bb-data) &middot; archive/{archive_month}.json
+  &middot; Ferien: {s['quelle']}</span>
   <span>Bahnhof Baierbrunn &middot; Versp&auml;tungen &amp; Ausf&auml;lle gg&uuml;. Fahrplan</span>
 </div>
 
@@ -1188,7 +1560,7 @@ def render_html_schulweg(s, month_label, year, archive_month):
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `cd factsheet && python -m pytest tests/test_render.py -v`
-Expected: 13 passed
+Expected: 14 passed
 
 - [ ] **Step 6: Add the CLI**
 
@@ -1429,21 +1801,30 @@ Four edits. The third is the one that currently forbids this whole change.
    > Nur `output/`, `schulweg.py` und - ausschliesslich bei
    > Schema-Aenderungen - die Datenaufbereitung in `generate.py` aendern.
 
-4. **New section "Schulweg-Datenblatt"** covering:
+4. **Network rule** (line 138-139) currently reads *"Keine externen Netzwerkziele
+   ausser `raw.githubusercontent.com/s7bb/...` ansprechen."* It must name
+   `openholidaysapi.org` as the second permitted target and state that a failure
+   there is **non-fatal by design** — the committed `FERIEN` table takes over and
+   the sheet says so in its footer.
+5. **New section "Schulweg-Datenblatt"** covering:
    - Purpose and window: Mo–Fr 06:30–08:30, both directions, per departure slot.
    - Its own freeze declaration, mirroring lines 40-62: after Task 6 the layout
      is fixed; only the data changes month to month. `CSS`, `kpi_strip`,
      `slot_grid`, `school_spark`, `render_html_schulweg`, the colour values and
      the order/count of the three cards are not to be edited.
-   - **`FERIEN` maintenance:** the table must be extended from the official
-     StMUK publication before `FERIEN_ABGEDECKT` expires (currently
-     2027-07-31). An uncovered month aborts the run by design.
+   - **Ferien sources:** OpenHolidays API first, committed `FERIEN` table as
+     fallback, and the sheet footer always names which one was used. The table
+     is regenerated with `python tools/refresh_ferien.py`, never hand-edited.
+   - **`FERIEN` maintenance:** refresh the table before `FERIEN_ABGEDECKT`
+     expires (currently 2028-01-31). A month outside it aborts the run *only*
+     when the API is also unavailable — that combination is deliberate.
    - The Werktage fallback for months with no school days.
    - That `schulweg.py` runs **after** `generate.py`, never before.
 
 - [ ] **Step 3: Update `factsheet/README.md`**
 
-- File tree (lines 14-23): add `schulweg.py`, `requirements-dev.txt`, `tests/`.
+- File tree (lines 14-23): add `schulweg.py`, `requirements-dev.txt`, `pytest.ini`,
+  `tests/`, `tools/refresh_ferien.py`.
 - Run commands (lines 34-38): add `python schulweg.py` and both output names.
 - Workflow description (lines 45-55): both scripts run, the release carries two
   PDFs.
@@ -1465,7 +1846,8 @@ gehen nicht ins Netz. Das PDF-Rendering wird ueber die Seitenhoehenpruefung in
 
 - [ ] **Step 4: Update the root `CLAUDE.md`**
 
-- "Layout" tree: add `schulweg.py`, `requirements-dev.txt`, `tests/`.
+- "Layout" tree: add `schulweg.py`, `requirements-dev.txt`, `pytest.ini`,
+  `tests/`, `tools/refresh_ferien.py`.
 - "Commands": add `python schulweg.py` and the pytest invocation. Replace
   "No test suite" with the pytest command.
 - "Architecture": add a paragraph for `schulweg.py` — imports `load_month`,
@@ -1509,8 +1891,13 @@ git commit -m "docs: document the Schulweg sheet and freeze its template"
 
 - [ ] **Step 1: Run the full test suite**
 
-Run: `cd factsheet && python -m pytest tests/ -v`
-Expected: all pass.
+Run: `cd factsheet && python -m pytest tests/ -v -m "not network"`
+Expected: 60 passed.
+
+Then the drift check against the live API:
+
+Run: `cd factsheet && python -m pytest tests/ -v -m network`
+Expected: 1 passed.
 
 - [ ] **Step 2: Generate every verification month**
 

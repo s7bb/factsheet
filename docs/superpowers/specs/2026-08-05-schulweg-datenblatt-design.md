@@ -89,29 +89,90 @@ Ostermontag 06.04, Himmelfahrt 14.05, Pfingstmontag 25.05, Fronleichnam 04.06.
 
 Augsburger Friedensfest (08.08) is city-of-Augsburg only and does not apply.
 
-### School holidays — versioned table with a coverage guard
+### School holidays — OpenHolidays API with a committed table as fallback
 
-Bavarian school-holiday dates cannot be derived; they are published per school
-year by the Bayerisches Staatsministerium für Unterricht und Kultus. They go
-into `schulweg.py` as an explicit table:
+Bavarian school-holiday dates cannot be derived. They come from the
+[OpenHolidays API](https://www.openholidaysapi.org/) at runtime:
 
-```python
-# Bayerische Schulferien. Quelle: StMUK. Vor Erweiterung gegen die
-# offizielle Veroeffentlichung pruefen.
-FERIEN = [
-    ("2025-11-03", "2025-11-07"),   # Herbstferien 2025
-    ...
-]
-FERIEN_ABGEDECKT = ("2025-08-01", "2027-07-31")
+```
+GET https://openholidaysapi.org/SchoolHolidays
+    ?countryIsoCode=DE&subdivisionCode=DE-BY&languageIsoCode=DE
+    &validFrom=<YYYY>-01-01&validTo=<YYYY>-12-31
 ```
 
-**The dates must be verified against the official StMUK publication before the
-first run. Do not transcribe them from memory or from this document.**
+No API key, no registration. Query windows are capped at three years, which one
+calendar year comfortably satisfies. Querying a full calendar year also returns
+the Weihnachtsferien that start in December and run into January, because the
+API returns every period *overlapping* the window.
 
-The coverage window is load-bearing: if the requested month is not fully inside
-`FERIEN_ABGEDECKT`, `schulweg.py` exits with a clear error rather than silently
-labelling holiday weekdays as Schultage. That turns "the table went stale" into
-a loud workflow failure instead of a wrong PDF.
+If the API is unreachable **or returns an implausible result**, `schulweg.py`
+falls back to a committed `FERIEN` table and says so on the sheet.
+
+#### Why the plausibility check matters more than the error handling
+
+A network error is easy — it raises, and the fallback takes over. The dangerous
+case is a successful `200` carrying an empty or truncated array: an endpoint
+rename, a changed parameter name or a silent upstream data gap would then make
+*every weekday a Schultag*, and the sheet would look completely normal while
+being wrong. So a response is accepted only if it contains at least five School
+periods for the year; Bavaria has seven. Anything less is treated as a failure.
+
+#### Data-quality gotcha
+
+Querying `subdivisionCode=DE-BY` also returns entries scoped to sub-regions of
+Bavaria. `Friedensfest` on 08.08. comes back tagged `DE-BY-AU` — Augsburg only.
+Consumers must filter on each entry's own subdivision list rather than trusting
+the query parameter. This bites the public-holiday endpoint rather than the
+school one, but the same rule applies to both.
+
+#### Public holidays stay computed
+
+Public holidays are **not** fetched. The Easter-derived computation above is
+exact, needs no network, and was verified against the API's DE-BY response for
+2026: all 13 entries match. Fetching them would add a failure mode for no gain.
+
+#### The fallback table
+
+`FERIEN` is a committed list of `("YYYY-MM-DD", "YYYY-MM-DD")` ranges plus
+`FERIEN_ABGEDECKT`, its coverage window. It is **generated from the same API**
+by a maintenance script, never hand-typed — hand transcription is precisely what
+produced a wrong Weihnachtsferien 2026/27 start date (23.12. instead of 24.12.)
+during design.
+
+Buß- und Bettag arrives from the API as an ordinary single-day School period and
+is stored as such, so both code paths produce the identical data shape: a sorted
+list of inclusive date-string pairs.
+
+The coverage window is load-bearing **on the fallback path only**: if the API
+fails and the requested month is not fully inside `FERIEN_ABGEDECKT`,
+`schulweg.py` exits with a clear error rather than silently labelling holiday
+weekdays as Schultage. When the API answers, the guard is not consulted.
+
+#### Keeping the two paths honest
+
+Two code paths that can disagree are a real cost of this design. Three things
+contain it:
+
+1. The table is generated from the API, so they cannot drift arbitrarily.
+2. A test compares the live API against the committed table across the coverage
+   window and fails on any difference, so drift surfaces in development rather
+   than in a published PDF.
+3. **The sheet states which source it used**, with the table's vintage —
+   `Ferien: OpenHolidays API` or
+   `Ferien: hinterlegte Tabelle (Stand 2026-08-05)`. A fallback is never silent.
+
+#### Reproducibility caveat
+
+Re-rendering an old month can produce a different result from the original run
+if the upstream data changed in between. That is inherent to fetching at runtime
+and is accepted; the source line on the sheet is what makes it detectable.
+
+#### Network rule
+
+`factsheet/CLAUDE.md:138-139` currently permits exactly one external target,
+`raw.githubusercontent.com/s7bb/...`. It must be amended to name
+`openholidaysapi.org` as the second, and to state that failure there is
+non-fatal by design.
 
 ### Zero-school-day months
 
@@ -361,7 +422,9 @@ series and is a deliberate choice, not an oversight.
 | --- | --- |
 | `easter(year)` | Anonymous Gregorian algorithm |
 | `feiertage(year)` | Bavarian public holidays for a year |
-| `schultage(month)` | school days in month; `[]` if none; guards `FERIEN_ABGEDECKT` |
+| `ferien_api(von, bis)` | OpenHolidays query; `None` on failure or implausible response |
+| `ferien_ranges(year)` | `(ranges, quelle)` — API first, committed table second |
+| `tage_im_monat(month)` | `(days, fallback, quelle)`; Werktage when no school days |
 | `slot_centres(df)` | derive the six slot centres from the data |
 | `compute_schulweg(df)` | window + month-wide stats per direction, slot table, daily series |
 | `kpi_strip(s)` | HTML for block 1 |
@@ -451,11 +514,14 @@ the friendly `if [ -z "$PDF" ]` message at lines 69-72 is already unreachable.
    It is the next month the workflow will actually run.
 5. Spot-check July against this document: → Wolfratshausen window availability
    90,6 %, Ø 5,39 Min., 08:00 slot Ø 9,50 Min. with 3 cancellations.
-6. Confirm the `FERIEN` table matches the official StMUK publication, and that a
-   month outside `FERIEN_ABGEDECKT` exits with a clear error.
-7. Confirm `generate.py`'s output PDF is byte-identical before and after the
+6. Confirm the committed `FERIEN` table still matches the live API across the
+   coverage window, that an implausible API response falls back rather than
+   producing a holiday-free month, and that a month outside `FERIEN_ABGEDECKT`
+   exits with a clear error **only** when the API is also unavailable.
+7. Confirm the sheet footer names the Ferien source that was actually used.
+8. Confirm `generate.py`'s output PDF is byte-identical before and after the
    change.
-8. Dry-run the workflow's log parsing against a two-PDF `gen.log` to confirm
+9. Dry-run the workflow's log parsing against a two-PDF `gen.log` to confirm
    `REPORT_YM` is single-valued and both PDFs are collected.
 
 ## Out of scope
