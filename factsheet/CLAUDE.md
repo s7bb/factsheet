@@ -45,7 +45,73 @@ Monat aendern sich ausschliesslich die Daten (Zahlen, Monatsname).**
 Das Layout ist datenunabhaengig: Jeder Monat rendert mit exakt derselben
 Elementanordnung, denselben Element-Typen (Donut, Balkenhistogramm, Richtungs-
 Kacheln, Zielbahnhof-Balken, Vergleichsbalken, Sparkline) und denselben Farben.
-Bestaetigt: Mai/Juni/Juli 2026 ergeben alle die identische Layouthoehe.
+Bestaetigt: Mai/Juni/Juli 2026 ergeben alle die identische Layouthoehe von
+**1116 px** (Grenze: 1123 px), also 7 px Reserve.
+
+### Einmalige Vorlagen-Revision 2026-08-05 (Chromium-Drift)
+
+Die Vorlage wurde **einmal** bewusst angepasst. Grund war keine Datenanomalie,
+sondern der Renderer: Chromium 151 setzte dieselbe, unveraenderte Vorlage
+1127 px hoch statt wie zuvor knapp unter 1123 px. Das PDF war dadurch
+tatsaechlich **zweiseitig**, und der A4-Guard des Workflows haette jeden
+Monatslauf abgebrochen.
+
+Nachgewiesen: Mai, Juni und Juli 2026 ergaben alle 1127 px (also
+datenunabhaengig), pandas 2.3.3 und 3.0.5 lieferten identische Zahlen und
+dieselbe Hoehe, und das aeltere Chromium im Container zeigte den Effekt nicht.
+
+Geaendert wurden ausschliesslich zwei Leerraum-Werte unterhalb des letzten
+Inhaltselements:
+
+- `.page` Innenabstand unten: `2mm` -> `0`
+- `.foot` `margin-top`: `4px` -> `0`
+
+Kein Element wurde entfernt, keine Farbe, kein Element-Typ und keine
+Reihenfolge geaendert; die Kennzahlen sind unveraendert (Zusammenfassungszeile
+vor und nach der Aenderung identisch). Einzige sichtbare Folge: die Fusszeile
+sitzt 4 px naeher an der letzten Kachel.
+
+### Donut-Beschriftung korrigiert (gleiche Revision)
+
+Zwei gemeldete Darstellungsfehler in **beiden** Donuts (Verfuegbarkeit und
+Puenktlichkeit, beide aus `donut()`):
+
+1. Die Zahl sass **14,1 px zu hoch** im Kreis. Ursache: `y="66"` ist die
+   Grundlinie, nicht die Mitte. Korrigiert mit `y="70"` (Kreismittelpunkt)
+   plus `dominant-baseline="central"` - das zentriert unabhaengig von den
+   Schriftmetriken, statt einen ausgerechneten Versatz fest zu verdrahten.
+2. Die Zahl war **zu gross**: 88,2 px breit bei 91,0 px Innendurchmesser,
+   also 97 % - sie stiess fast an den Ring. `.donut-num` `30px` -> `24px`
+   und `.donut-pct` `14px` -> `12px` ergeben 71,2 px, also 78 %.
+
+Gemessen nach der Korrektur: Versatz (0,0 / 0,0) px in beiden Donuts, Mai/
+Juni/Juli 2026. Seitenhoehe unveraendert 1116 px, Kennzahlen unveraendert.
+
+### Mini-Kacheln der Puenktlichkeit einzeilig (gleiche Revision)
+
+Die vier Kacheln brachen auf bis zu drei Zeilen um (`> 15 Min. Versp.`) und
+nutzten die Abkuerzung "Versp.". Beides ist behoben:
+
+- Beschriftungen jetzt `unter 5 Min.` / `ueber 5 Min.` / `ueber 15 Min.` /
+  `p90 (Min.)` - keine Abkuerzung mehr, jede genau **eine** Zeile.
+- `.mini .l` `9,5px` -> `8,5px`, Sperrung `.4px` -> `0`, `white-space:nowrap`;
+  `.mini` Abstand `10px` -> `6px`, Kachel-Innenabstand `7px 4px` -> `7px 3px`.
+
+**Warum das Wort nicht in jeder Kachel steht:** gemessen stehen je Kachel nur
+rund 60 px Textbreite zur Verfuegung. `> 15 Min. Verspaetung` ausgeschrieben
+braucht einzeilig eine Schriftgroesse von **3,9 px** - unlesbar. Das Wort
+"Verspaetung" steht deshalb einmal ausgeschrieben im Kartentext darueber
+("Ø Verspaetung ..."), die Kacheln tragen nur die Schwelle. Geringste
+Restreserve in der engsten Kachel: +5,5 px.
+
+Dadurch schrumpft die Karte um 23 px; da das Layout im Fluss liegt, ruecken
+alle folgenden Bloecke automatisch nach oben. Seitenhoehe **1116 px ->
+1093 px**, also 30 px Reserve zur Grenze. Kennzahlen unveraendert.
+
+**Das ist kein Praezedenzfall fuer Layout-Aenderungen.** Es war eine einmalige,
+dokumentierte Revision gegen eine Renderer-Regression, ausdruecklich vom
+Eigentuemer des Repos beauftragt. Mit den neuen Werten ist die Vorlage erneut
+eingefroren.
 
 Du darfst daher **nicht** veraendern:
 - die Praesentationsfunktionen `render_html`, `donut`, `histogram`,
@@ -73,6 +139,10 @@ unangetastet.
   wuerde die feste Vorlage verletzen. Behandle es als Anomalie: pruefe, ob die
   Daten ungewoehnlich sind (z. B. falscher/ nicht finalisierter Monat), und
   **committe nicht**. Melde den Fall, statt das Design anzupassen.
+- Pruefe dabei auch den **Renderer**: Ergibt die Warnung fuer *mehrere*
+  Monate dieselbe Hoehe, liegt es nicht an den Daten, sondern an einer neuen
+  Chromium-Version (siehe "Einmalige Vorlagen-Revision"). Auch dann nicht
+  eigenmaechtig das Layout anpassen - melden.
 - Wenn `WARNUNG: <Monat> ist noch nicht finalisiert` erscheint, wurde ein
   laufender Monat gewaehlt. Fuer den regulaeren Monatslauf ist das ein Fehler -
   pruefe, ob wirklich der Vormonat verarbeitet wird.

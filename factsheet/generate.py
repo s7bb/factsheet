@@ -161,7 +161,8 @@ def donut(pct, color, track="#e6ebf1", r=52, sw=13):
             f'<circle cx="70" cy="70" r="{r}" fill="none" stroke="{track}" stroke-width="{sw}"/>'
             f'<circle cx="70" cy="70" r="{r}" fill="none" stroke="{color}" stroke-width="{sw}" '
             f'stroke-dasharray="{fill:.2f} {c:.2f}" stroke-linecap="round" transform="rotate(-90 70 70)"/>'
-            f'<text x="70" y="66" class="donut-num">{dn(pct,1)}<tspan class="donut-pct">%</tspan></text>'
+            f'<text x="70" y="70" dominant-baseline="central" class="donut-num">'
+            f'{dn(pct,1)}<tspan class="donut-pct">%</tspan></text>'
             f'</svg>')
 
 
@@ -234,7 +235,7 @@ def render_html(s, month_label, month_file, year, archive_month):
 @page { size: A4; margin: 0; }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Helvetica Neue',Arial,sans-serif; color:#1c2733; width:210mm; }
-.page { padding:6mm 13mm 2mm; }
+.page { padding:6mm 13mm 0; }
 .head { display:flex; align-items:center; justify-content:space-between;
   border-bottom:3px solid #1b4f8a; padding-bottom:7px; margin-bottom:10px; }
 .brand { display:flex; align-items:center; gap:12px; }
@@ -251,15 +252,16 @@ h1 { font-size:21px; font-weight:800; letter-spacing:-.3px; }
 .card { border:1px solid #e2e8ef;border-radius:11px;padding:10px 14px;background:#fbfcfd; }
 .kpi-row { display:flex;align-items:center;gap:16px; }
 .donut { width:118px;height:118px;flex:none; }
-.donut-num { font-size:30px;font-weight:800;fill:#1c2733;text-anchor:middle; }
-.donut-pct { font-size:14px;font-weight:700; }
+.donut-num { font-size:24px;font-weight:800;fill:#1c2733;text-anchor:middle; }
+.donut-pct { font-size:12px;font-weight:700; }
 .kpi-side .big { font-size:13px;color:#48566a;line-height:1.5; }
 .kpi-side .big b { color:#1c2733; }
 .pill { display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-top:6px; }
-.mini { display:flex;gap:10px;margin-top:7px; }
-.mini div { flex:1;text-align:center;background:#fff;border:1px solid #e9eef4;border-radius:8px;padding:7px 4px; }
+.mini { display:flex;gap:6px;margin-top:7px; }
+.mini div { flex:1;text-align:center;background:#fff;border:1px solid #e9eef4;border-radius:8px;padding:7px 3px; }
 .mini .v { font-size:17px;font-weight:800;color:#1b4f8a; }
-.mini .l { font-size:9.5px;color:#6a7684;text-transform:uppercase;letter-spacing:.4px;margin-top:1px; }
+.mini .l { font-size:8.5px;color:#6a7684;text-transform:uppercase;letter-spacing:0;
+  margin-top:1px;white-space:nowrap; }
 .hist { width:100%;height:auto; }
 .hbar-val { font-size:12px;font-weight:700;text-anchor:middle;fill:#48566a; }
 .hbar-lab { font-size:10px;fill:#6a7684;text-anchor:middle; }
@@ -286,7 +288,7 @@ h1 { font-size:21px; font-weight:800; letter-spacing:-.3px; }
 .calc-fill span { color:#fff;font-weight:800;font-size:12px;padding-right:10px; }
 .spark { width:100%;height:auto; }
 .spark-lab { font-size:9px;fill:#8592a1;text-anchor:middle; }
-.foot { margin-top:4px;padding-top:5px;border-top:1px solid #e2e8ef;
+.foot { margin-top:0;padding-top:5px;border-top:1px solid #e2e8ef;
   font-size:9.5px;color:#8592a1;display:flex;justify-content:space-between; }
 .notemark { font-size:10px;color:#6a7684;margin-top:5px;line-height:1.45; }
 """
@@ -323,9 +325,9 @@ h1 { font-size:21px; font-weight:800; letter-spacing:-.3px; }
       </div>
     </div>
     <div class="mini">
-      <div><div class="v">{dn(s['lt5_pct'],0)}%</div><div class="l">&lt; 5 Min.</div></div>
-      <div><div class="v">{dn(s['gt5_pct'],0)}%</div><div class="l">&gt; 5 Min. Versp.</div></div>
-      <div><div class="v">{dn(s['gt15_pct'],0)}%</div><div class="l">&gt; 15 Min. Versp.</div></div>
+      <div><div class="v">{dn(s['lt5_pct'],0)}%</div><div class="l">unter 5 Min.</div></div>
+      <div><div class="v">{dn(s['gt5_pct'],0)}%</div><div class="l">&uuml;ber 5 Min.</div></div>
+      <div><div class="v">{dn(s['gt15_pct'],0)}%</div><div class="l">&uuml;ber 15 Min.</div></div>
       <div><div class="v">{dn(s['p90'],0)}</div><div class="l">p90 (Min.)</div></div>
     </div>
   </div>
