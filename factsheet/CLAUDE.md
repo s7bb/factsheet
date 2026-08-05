@@ -71,6 +71,22 @@ Reihenfolge geaendert; die Kennzahlen sind unveraendert (Zusammenfassungszeile
 vor und nach der Aenderung identisch). Einzige sichtbare Folge: die Fusszeile
 sitzt 4 px naeher an der letzten Kachel.
 
+### Donut-Beschriftung korrigiert (gleiche Revision)
+
+Zwei gemeldete Darstellungsfehler in **beiden** Donuts (Verfuegbarkeit und
+Puenktlichkeit, beide aus `donut()`):
+
+1. Die Zahl sass **14,1 px zu hoch** im Kreis. Ursache: `y="66"` ist die
+   Grundlinie, nicht die Mitte. Korrigiert mit `y="70"` (Kreismittelpunkt)
+   plus `dominant-baseline="central"` - das zentriert unabhaengig von den
+   Schriftmetriken, statt einen ausgerechneten Versatz fest zu verdrahten.
+2. Die Zahl war **zu gross**: 88,2 px breit bei 91,0 px Innendurchmesser,
+   also 97 % - sie stiess fast an den Ring. `.donut-num` `30px` -> `24px`
+   und `.donut-pct` `14px` -> `12px` ergeben 71,2 px, also 78 %.
+
+Gemessen nach der Korrektur: Versatz (0,0 / 0,0) px in beiden Donuts, Mai/
+Juni/Juli 2026. Seitenhoehe unveraendert 1116 px, Kennzahlen unveraendert.
+
 **Das ist kein Praezedenzfall fuer Layout-Aenderungen.** Es war eine einmalige,
 dokumentierte Revision gegen eine Renderer-Regression, ausdruecklich vom
 Eigentuemer des Repos beauftragt. Mit den neuen Werten ist die Vorlage erneut

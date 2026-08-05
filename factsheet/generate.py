@@ -161,7 +161,8 @@ def donut(pct, color, track="#e6ebf1", r=52, sw=13):
             f'<circle cx="70" cy="70" r="{r}" fill="none" stroke="{track}" stroke-width="{sw}"/>'
             f'<circle cx="70" cy="70" r="{r}" fill="none" stroke="{color}" stroke-width="{sw}" '
             f'stroke-dasharray="{fill:.2f} {c:.2f}" stroke-linecap="round" transform="rotate(-90 70 70)"/>'
-            f'<text x="70" y="66" class="donut-num">{dn(pct,1)}<tspan class="donut-pct">%</tspan></text>'
+            f'<text x="70" y="70" dominant-baseline="central" class="donut-num">'
+            f'{dn(pct,1)}<tspan class="donut-pct">%</tspan></text>'
             f'</svg>')
 
 
@@ -251,8 +252,8 @@ h1 { font-size:21px; font-weight:800; letter-spacing:-.3px; }
 .card { border:1px solid #e2e8ef;border-radius:11px;padding:10px 14px;background:#fbfcfd; }
 .kpi-row { display:flex;align-items:center;gap:16px; }
 .donut { width:118px;height:118px;flex:none; }
-.donut-num { font-size:30px;font-weight:800;fill:#1c2733;text-anchor:middle; }
-.donut-pct { font-size:14px;font-weight:700; }
+.donut-num { font-size:24px;font-weight:800;fill:#1c2733;text-anchor:middle; }
+.donut-pct { font-size:12px;font-weight:700; }
 .kpi-side .big { font-size:13px;color:#48566a;line-height:1.5; }
 .kpi-side .big b { color:#1c2733; }
 .pill { display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-top:6px; }
