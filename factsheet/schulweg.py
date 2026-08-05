@@ -226,3 +226,75 @@ def assign_slot(minute, centres):
         return None
     return min(range(len(centres)),
                key=lambda i: (abs(minute - centres[i]), centres[i]))
+
+
+RICHTUNGEN = ("wolfratshausen", "muenchen")
+
+
+def kennzahlen(rows):
+    """Kennzahlen einer Teilmenge. Leere Stichproben liefern None statt NaN -
+    dth()/dn() wuerden sonst 'nan' ins PDF schreiben bzw. abbrechen."""
+    n = len(rows)
+    canc = int(rows["cancelled"].sum()) if n else 0
+    dl = rows.loc[~rows["cancelled"], "delay_minutes"].dropna() if n else []
+    if len(dl) == 0:
+        return {"n": n, "canc": canc,
+                "avail": 100 * (n - canc) / n if n else None,
+                "ontime": None, "avg": None, "gt5": None, "p90": None}
+    return {
+        "n": n, "canc": canc,
+        "avail": 100 * (n - canc) / n,
+        "ontime": 100 * float((dl <= 0).mean()),
+        "avg": float(dl.mean()),
+        "gt5": 100 * float((dl > 5).mean()),
+        "p90": float(dl.quantile(.9)),
+    }
+
+
+def compute_schulweg(df, month):
+    """Alle Kennzahlen des Schulweg-Datenblatts."""
+    tage, fallback, quelle = tage_im_monat(month)
+    tage_set = set(tage)
+
+    d = df[df["direction_bucket"].isin(RICHTUNGEN)].copy()
+    d["minute"] = d["local"].dt.hour * 60 + d["local"].dt.minute
+
+    fenster = d[d["date"].isin(tage_set)
+                & d["minute"].between(WINDOW_VON, WINDOW_BIS)].copy()
+
+    centres = slot_centres(fenster["minute"].tolist())
+    fenster["slot"] = fenster["minute"].map(lambda m: assign_slot(m, centres))
+
+    warnungen = []
+    if not fenster.empty:
+        doppelt = fenster.groupby(["date", "direction_bucket", "slot"]).size()
+        for (day, richtung, idx), anzahl in doppelt[doppelt > 1].items():
+            warnungen.append(
+                f"WARNUNG: {day} {richtung} Slot {hhmm(centres[int(idx)])}: "
+                f"mehr als eine Fahrt ({anzahl}) - Werte werden gemittelt.")
+
+    slots = []
+    for i in range(SLOTS):
+        label = hhmm(centres[i]) if i < len(centres) else "–"
+        dirs = {}
+        for richtung in RICHTUNGEN:
+            teil = fenster[(fenster["slot"] == i)
+                           & (fenster["direction_bucket"] == richtung)]
+            dirs[richtung] = kennzahlen(teil)
+        slots.append({"label": label, "dirs": dirs})
+
+    nc = fenster[~fenster["cancelled"]]
+    daily = {}
+    if not nc.empty:
+        means = nc.groupby("date")["delay_minutes"].mean()
+        daily = {day: float(v) for day, v in means.sort_index().items()}
+
+    return {
+        "days": len(tage), "fallback": fallback, "quelle": quelle,
+        "centres": centres,
+        "win": {r: kennzahlen(fenster[fenster["direction_bucket"] == r])
+                for r in RICHTUNGEN},
+        "mon": {r: kennzahlen(d[d["direction_bucket"] == r])
+                for r in RICHTUNGEN},
+        "slots": slots, "daily": daily, "warnungen": warnungen,
+    }
