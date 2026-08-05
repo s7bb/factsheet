@@ -90,6 +90,17 @@ unangetastet.
   laufender Monat gewaehlt. Fuer den regulaeren Monatslauf ist das ein Fehler -
   pruefe, ob wirklich der Vormonat verarbeitet wird.
 
+Zusaetzlich fuer das Schulweg-Datenblatt (`schulweg.py`):
+
+- Die Fusszeile muss die tatsaechlich verwendete Ferien-Quelle nennen
+  (`OpenHolidays API` oder die hinterlegte `FERIEN`-Tabelle samt Stand) -
+  nie unsichtbar lassen, welcher Pfad gelaufen ist.
+- Das Slot-Raster muss genau **6 Zeilen** zeigen, unabhaengig davon, wie
+  viele Fahrten die Daten tatsaechlich hergeben (fehlende Slots als "–").
+- Die Basis in der Kopfzeile (Schultage vs. Werktage) muss zum erzeugten
+  Monat passen: Werktage nur bei einem reinen Ferienmonat (Fallback),
+  sonst Schultage.
+
 ## Datenquelle & Schema
 
 - Quelle: `https://github.com/s7bb/s7bb-data`, Datei
@@ -186,7 +197,10 @@ Schultage werden aus den bayerischen Schulferien abgeleitet:
 Die Fusszeile des PDFs nennt immer, welche der beiden Quellen tatsaechlich
 verwendet wurde. Die Tabelle wird **nie von Hand bearbeitet**, sondern mit
 `python tools/refresh_ferien.py --von <YYYY-MM-DD> --bis <YYYY-MM-DD>` neu
-erzeugt; deren Ausgabe ersetzt den `FERIEN`-Block in `schulweg.py`.
+erzeugt; deren Ausgabe ersetzt sowohl den `FERIEN`-Block als auch
+`FERIEN_STAND` in `schulweg.py`. `FERIEN_STAND` nicht vergessen: es speist
+die Fusszeile ("hinterlegte Tabelle (Stand ...)") und bliebe sonst auf dem
+alten Datum stehen, obwohl die Tabelle aktualisiert wurde.
 
 ### `FERIEN`-Wartung
 

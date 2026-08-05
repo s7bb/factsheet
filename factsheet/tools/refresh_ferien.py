@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Erzeugt den FERIEN-Block fuer schulweg.py aus der OpenHolidays-API.
+"""Erzeugt FERIEN_STAND und den FERIEN-Block fuer schulweg.py aus der
+OpenHolidays-API.
 
 Aufruf:  python tools/refresh_ferien.py --von 2025-08-01 --bis 2028-01-31
 
-Gibt den Block auf stdout aus. Inhalt in schulweg.py ersetzen und committen.
-Die Tabelle wird nie von Hand getippt: genau das hat beim Entwurf ein falsches
-Startdatum der Weihnachtsferien 2026/27 erzeugt (23.12. statt 24.12.).
+Gibt beides auf stdout aus. Inhalt in schulweg.py ersetzen und committen -
+FERIEN_STAND steht dort oberhalb des FERIEN-Blocks und speist die
+Fusszeile des PDFs ("hinterlegte Tabelle (Stand ...)"); ohne die Ersetzung
+bliebe sie beim alten Datum haengen. Die Tabelle wird nie von Hand getippt:
+genau das hat beim Entwurf ein falsches Startdatum der Weihnachtsferien
+2026/27 erzeugt (23.12. statt 24.12.).
 
 Das Abfragefenster der API ist auf drei Jahre begrenzt.
 """
 import argparse
+import datetime as dt
 import json
 import urllib.parse
 import urllib.request
@@ -47,6 +52,7 @@ def main():
         (e["startDate"], e["endDate"], _name(e))
         for e in hole(args.von, args.bis) if e.get("type") == "School")
 
+    print(f'FERIEN_STAND = "{dt.date.today().isoformat()}"')
     print("# Erzeugt mit tools/refresh_ferien.py aus der OpenHolidays-API.")
     print("# Nicht von Hand bearbeiten - Skript erneut laufen lassen.")
     print("FERIEN = [")

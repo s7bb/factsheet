@@ -170,6 +170,7 @@ def test_coverage_guard_is_skipped_when_the_api_answers(monkeypatch):
     days, fallback, quelle = tage_im_monat("2035-01")
     assert quelle == QUELLE_API
     assert len(days) > 0
+    assert fallback is False
 
 
 def test_uncovered_month_without_api_aborts(monkeypatch):

@@ -99,11 +99,19 @@ Kein API-Key noetig - der Workflow verwendet kein LLM.
 ```bash
 cd factsheet
 pip install -r requirements-dev.txt
-python -m pytest tests/ -v
+python -m pytest tests/ -v -m "not network"
 ```
 
-Die Tests decken Kalender, Slot-Zuordnung, Kennzahlen und HTML-Aufbau ab; sie
-gehen nicht ins Netz. Das PDF-Rendering wird ueber die Seitenhoehenpruefung in
-`render_pdf` verifiziert.
+Die Tests decken Kalender, Slot-Zuordnung, Kennzahlen und HTML-Aufbau ab; mit
+`-m "not network"` gehen sie nicht ins Netz. Das PDF-Rendering wird ueber die
+Seitenhoehenpruefung in `render_pdf` verifiziert.
+
+Eine Ausnahme ist `test_live_api_matches_the_committed_table`
+(`tests/test_kalender.py`, markiert mit `@pytest.mark.network`): sie fragt
+`openholidaysapi.org` live ab und vergleicht das Ergebnis mit der
+hinterlegten `FERIEN`-Tabelle, um Drift zwischen beiden Pfaden fruehzeitig zu
+erkennen. Sie laeuft nur ohne den `-m "not network"`-Filter, also gezielt mit
+`python -m pytest tests/ -v -m network` oder `python -m pytest
+tests/test_kalender.py::test_live_api_matches_the_committed_table`.
 
 Details zu Definitionen, Konventionen und Sonderfaellen: siehe `CLAUDE.md`.

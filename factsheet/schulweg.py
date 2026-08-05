@@ -295,7 +295,6 @@ def compute_schulweg(df, month):
 
     return {
         "days": len(tage), "fallback": fallback, "quelle": quelle,
-        "centres": centres,
         "win": {r: kennzahlen(fenster[fenster["direction_bucket"] == r])
                 for r in RICHTUNGEN},
         "mon": {r: kennzahlen(d[d["direction_bucket"] == r])
@@ -382,7 +381,7 @@ def kpi_strip(s):
 def slot_grid(s):
     werte = [d[r]["avg"] for d in (x["dirs"] for x in s["slots"])
              for r in RICHTUNGEN if d[r]["avg"] is not None]
-    vmax = max(werte) if werte else 1
+    vmax = (max(werte) if werte else 0) or 1
     rows = ""
     for slot in s["slots"]:
         cells = ""
@@ -504,7 +503,7 @@ def render_html_schulweg(s, month_label, year, archive_month):
 </div>
 
 <div class="card">
-  <div class="section-t">&Oslash; Versp&auml;tung je Tag</div>
+  <div class="section-t">&Oslash; Versp&auml;tung je {'Werktag' if s['fallback'] else 'Schultag'} (Min.)</div>
   {school_spark(s['daily'])}
 </div>
 
@@ -520,7 +519,6 @@ def render_html_schulweg(s, month_label, year, archive_month):
 def main():
     import argparse
     import pathlib
-    import sys
 
     ap = argparse.ArgumentParser(
         description="S7-Baierbrunn-Schulweg-Datenblatt (PDF) erzeugen.")
