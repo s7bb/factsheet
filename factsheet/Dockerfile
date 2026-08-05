@@ -9,12 +9,13 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Generator only; data is fetched at runtime from raw.githubusercontent.com.
-COPY generate.py ./
+# Generatoren; Daten werden zur Laufzeit von raw.githubusercontent.com geholt.
+COPY generate.py schulweg.py ./
 
 # PDFs land here; mount a host dir over it to collect the output.
 RUN mkdir -p /app/output
 VOLUME ["/app/output"]
 
-# Args (e.g. --month 2026-06) pass straight through to the generator.
-ENTRYPOINT ["python", "generate.py"]
+# Ohne Argumente laufen beide Generatoren; mit Argumenten (z. B. --month
+# 2026-06) werden sie an beide durchgereicht.
+ENTRYPOINT ["sh", "-c", "python generate.py \"$@\" && python schulweg.py \"$@\"", "--"]

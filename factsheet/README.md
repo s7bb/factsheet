@@ -1,8 +1,10 @@
-# S7 Baierbrunn - Monatsdatenblatt
+# S7 Baierbrunn - Monatsdatenblatt & Schulweg-Datenblatt
 
-Erzeugt monatlich ein einseitiges DIN-A4-PDF zur Betriebsqualitaet der S-Bahn
+Erzeugt monatlich zwei einseitige DIN-A4-PDFs zur Betriebsqualitaet der S-Bahn
 **S7** am Bahnhof **Baierbrunn**: Verfuegbarkeit, Puenktlichkeit, Zielbahnhof-
-Erreichbarkeit und der Effekt, wenn Ausfaelle als Verspaetung gewertet werden.
+Erreichbarkeit und der Effekt, wenn Ausfaelle als Verspaetung gewertet werden -
+einmal fuer den Gesamtmonat (`generate.py`) und einmal fuer den Morgenverkehr
+Mo-Fr 06:30-08:30 (`schulweg.py`).
 
 Datenquelle: [github.com/s7bb/s7bb-data](https://github.com/s7bb/s7bb-data).
 
@@ -16,10 +18,15 @@ Im Repo unter `factsheet/`, der Workflow liegt an der Repo-Wurzel
 ├── .github/workflows/monthly-factsheet.yml   # Workflow (arbeitet in factsheet/)
 └── factsheet/
     ├── CLAUDE.md                              # Betriebsanleitung fuer Claude Code
-    ├── generate.py                           # deterministischer PDF-Generator
+    ├── generate.py                            # deterministischer PDF-Generator (Monatsdatenblatt)
+    ├── schulweg.py                            # deterministischer PDF-Generator (Schulweg-Datenblatt)
+    ├── tools/refresh_ferien.py                # erneuert die FERIEN-Tabelle aus der OpenHolidays-API
     ├── requirements.txt
+    ├── requirements-dev.txt                   # zusaetzlich: pytest, fuer die Tests
+    ├── pytest.ini
+    ├── tests/                                 # Offline-Tests (Kalender, Slots, Kennzahlen, HTML)
     ├── README.md
-    └── output/                               # erzeugte PDFs (vom Workflow committet)
+    └── output/                               # erzeugte PDFs (gitignoriert, Release-Assets)
 ```
 
 ## Lokal ausfuehren
@@ -31,14 +38,21 @@ cd factsheet
 pip install -r requirements.txt
 python -m playwright install --with-deps chromium
 
-python generate.py                 # Vormonat
+python generate.py                 # Monatsdatenblatt, Vormonat
 python generate.py --month 2026-06 # bestimmter Monat (Backfill)
+
+python schulweg.py                 # Schulweg-Datenblatt, Vormonat
+python schulweg.py --month 2026-06 # bestimmter Monat (Backfill)
 ```
 
-Ergebnis: `output/S7_Baierbrunn_<Monat><Jahr>_Datenblatt.pdf`.
+Ergebnis:
+- `output/S7_Baierbrunn_<Monat><Jahr>_Datenblatt.pdf` (Monatsdatenblatt)
+- `output/S7_Baierbrunn_<Monat><Jahr>_Schulweg.pdf` (Schulweg-Datenblatt)
 
-`generate.py` ist eigenstaendig und benoetigt kein LLM. Der CI-Lauf ruft das
-Skript direkt auf; es gibt keine KI/Model-Abhaengigkeit im Erzeugungspfad.
+Beide Skripte sind eigenstaendig und benoetigen kein LLM; `schulweg.py`
+importiert seine Datengrundlage aus `generate.py` und laeuft immer nach ihm.
+Der CI-Lauf ruft die Skripte direkt auf; es gibt keine KI/Model-Abhaengigkeit
+im Erzeugungspfad.
 
 ## Automatischer Monatslauf
 
@@ -48,10 +62,12 @@ Der Workflow `.github/workflows/monthly-factsheet.yml` (an der Repo-Wurzel):
   Vormonat und laesst sich ueber **"Run workflow"** manuell mit optionalem Monat
   starten;
 - installiert Python-Abhaengigkeiten und Chromium;
-- fuehrt `python generate.py` im Verzeichnis `factsheet/` aus (leerer Monat =
-  Vormonat, sonst der angegebene Monat);
-- veroeffentlicht das erzeugte PDF als **GitHub-Release** mit Tag `MM.YYYY`
-  (z. B. `07.2026`). Bei erneutem Lauf fuer denselben Monat wird das PDF im
+- fuehrt `python generate.py` gefolgt von `python schulweg.py` im Verzeichnis
+  `factsheet/` aus (leerer Monat = Vormonat, sonst der angegebene Monat fuer
+  beide Skripte);
+- veroeffentlicht die beiden erzeugten PDFs (Monatsdatenblatt und
+  Schulweg-Datenblatt) gemeinsam als ein **GitHub-Release** mit Tag `MM.YYYY`
+  (z. B. `07.2026`). Bei erneutem Lauf fuer denselben Monat werden die PDFs im
   bestehenden Release ersetzt.
 
 ### Einrichtung
@@ -65,13 +81,37 @@ Kein API-Key noetig - der Workflow verwendet kein LLM.
 ### Hinweise
 
 - Der Erzeugungspfad ist rein deterministisch (pandas + Playwright/Chromium).
-  Einzige externe Netzwerkquelle: `raw.githubusercontent.com/s7bb/s7bb-data`
-  (statische Monats-JSON).
+  Externe Netzwerkquellen: `raw.githubusercontent.com/s7bb/s7bb-data`
+  (statische Monats-JSON, beide Skripte) und `openholidaysapi.org`
+  (bayerische Schulferien, nur `schulweg.py`). Ist Letztere nicht erreichbar,
+  faellt `schulweg.py` auf die im Skript hinterlegte `FERIEN`-Tabelle zurueck -
+  das ist kein Fehler, sondern das vorgesehene Verhalten; die Fusszeile des
+  PDFs nennt die tatsaechlich verwendete Quelle.
 - Das Release wird ueber `gh release` mit dem automatisch bereitgestellten
   `GITHUB_TOKEN` angelegt; kein zusaetzliches Secret noetig.
 - **Finalisierungs-Guard:** Ist der Berichtsmonat upstream noch nicht als
   `finalized` markiert (oder ueberschreitet der Inhalt eine A4-Seite), bricht der
   Lauf mit Fehler ab und veroeffentlicht **kein** Release. Bei Bedarf spaeter
   erneut anstossen, sobald der Vormonat finalisiert ist.
+
+## Tests
+
+```bash
+cd factsheet
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v -m "not network"
+```
+
+Die Tests decken Kalender, Slot-Zuordnung, Kennzahlen und HTML-Aufbau ab; mit
+`-m "not network"` gehen sie nicht ins Netz. Das PDF-Rendering wird ueber die
+Seitenhoehenpruefung in `render_pdf` verifiziert.
+
+Eine Ausnahme ist `test_live_api_matches_the_committed_table`
+(`tests/test_kalender.py`, markiert mit `@pytest.mark.network`): sie fragt
+`openholidaysapi.org` live ab und vergleicht das Ergebnis mit der
+hinterlegten `FERIEN`-Tabelle, um Drift zwischen beiden Pfaden fruehzeitig zu
+erkennen. Sie laeuft nur ohne den `-m "not network"`-Filter, also gezielt mit
+`python -m pytest tests/ -v -m network` oder `python -m pytest
+tests/test_kalender.py::test_live_api_matches_the_committed_table`.
 
 Details zu Definitionen, Konventionen und Sonderfaellen: siehe `CLAUDE.md`.

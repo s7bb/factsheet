@@ -8,16 +8,18 @@ how cancellations affect the picture.
 It is a community effort built from publicly observable arrival data. Nothing
 here is official.
 
-📄 **[Latest factsheet (PDF)](https://github.com/s7bb/factsheet/releases/latest)** —
-the most recent monthly one-pager, always pointing at the newest release.
+📄 **[Latest factsheets (PDF)](https://github.com/s7bb/factsheet/releases/latest)** -
+each release carries two PDFs, the Monatsdatenblatt (whole month) and the
+Schulweg-Datenblatt (morning commute, Mon-Fri 06:30-08:30); the link always
+points at the newest release.
 
 ## Repositories
 
 | Repository | Purpose |
 | --- | --- |
-| [**s7bb/s7bb**](https://github.com/s7bb/s7bb) | The S7bb **web application** — an interactive view of the S7/Baierbrunn data, intended to be **run locally** for your own use. Start here if you want to explore the data interactively. |
+| [**s7bb/s7bb**](https://github.com/s7bb/s7bb) | The S7bb **web application** - an interactive view of the S7/Baierbrunn data, intended to be **run locally** for your own use. Start here if you want to explore the data interactively. |
 | [**s7bb/s7bb-data**](https://github.com/s7bb/s7bb-data) | The **data repository**. Raw, archived arrival records per month as `archive/<YYYY-MM>.json`. This is the single source of truth that the other repositories read from. |
-| [**s7bb/factsheet**](https://github.com/s7bb/factsheet) | *(this repo)* Generates a one-page **PDF factsheet** (German, DIN A4) summarising a month of S7/Baierbrunn operation. Runs monthly and publishes each PDF as a GitHub Release tagged `MM.YYYY`. See [`factsheet/README.md`](factsheet/README.md). |
+| [**s7bb/factsheet**](https://github.com/s7bb/factsheet) | *(this repo)* Generates two one-page **PDF factsheets** (German, DIN A4) each month: the Monatsdatenblatt (whole month) and the Schulweg-Datenblatt (morning commute, Mon-Fri 06:30-08:30). Runs monthly and publishes both PDFs in one GitHub Release tagged `MM.YYYY`. See [`factsheet/README.md`](factsheet/README.md). |
 
 ## Data
 
