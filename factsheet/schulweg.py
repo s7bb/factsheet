@@ -298,3 +298,44 @@ def compute_schulweg(df, month):
                 for r in RICHTUNGEN},
         "slots": slots, "daily": daily, "warnungen": warnungen,
     }
+
+
+def school_spark(daily):
+    """Sparkline der taeglichen Durchschnittsverspaetung.
+
+    Eigene Kopie statt Import aus generate.py: die dortige Fassung beschriftet
+    nur Tage mit 'd % 5 == 0 or d == 1', was bei einer Reihe aus reinen
+    Schultagen (Luecken an Wochenenden und in Ferien) je nach Monat 3 bis 6
+    Beschriftungen ergibt. Hier wird stattdessen jeder n-te Punkt beschriftet,
+    plus erster und letzter.
+
+    Die Punkte sind gleichmaessig ueber den Index verteilt, nicht ueber das
+    Datum: eine Luecke Fr->Mo sieht aus wie Mo->Di. Fuer eine Reihe 'je
+    Schultag' ist das beabsichtigt."""
+    days = sorted(daily)
+    W, H = 700, 80
+    if not days:
+        return f'<svg viewBox="0 0 {W} {H}" class="spark"></svg>'
+
+    vmax = max(daily.values()) or 1
+    pts = []
+    for i, day in enumerate(days):
+        px = 10 + (W - 20) * i / (len(days) - 1 or 1)
+        py = H - 18 - (H - 30) * daily[day] / vmax
+        pts.append((px, py))
+
+    poly = " ".join(f"{px:.1f},{py:.1f}" for px, py in pts)
+    area = f"10,{H-18} " + poly + f" {pts[-1][0]:.1f},{H-18}"
+    dots = "".join(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.3" fill="#1b4f8a"/>'
+                   for px, py in pts)
+
+    step = max(1, round(len(days) / 6))
+    marked = {0, len(days) - 1} | set(range(0, len(days), step))
+    xlab = "".join(f'<text x="{pts[i][0]:.1f}" y="{H-4}" class="spark-lab">'
+                   f'{days[i].day}</text>'
+                   for i in sorted(marked))
+
+    return (f'<svg viewBox="0 0 {W} {H}" class="spark">'
+            f'<polygon points="{area}" fill="#dbe7f5"/>'
+            f'<polyline points="{poly}" fill="none" stroke="#1b4f8a" stroke-width="2"/>'
+            f'{dots}{xlab}</svg>')
