@@ -1,17 +1,18 @@
 import datetime as dt
 import re
 
-from schulweg import school_spark
+from schulweg import school_spark, SPARK_LABELS
 
 
 def label_count(svg):
     return len(re.findall(r'class="spark-lab"', svg))
 
 
-def test_spark_labels_scale_with_point_count():
-    for n in (18, 22, 23):
+def test_spark_labels_never_exceed_the_target_count():
+    """Eine Schulmonatsreihe hat je nach Monat 14 bis 23 Punkte."""
+    for n in range(14, 24):
         daily = {dt.date(2026, 7, 1) + dt.timedelta(days=i): 3.0 for i in range(n)}
-        assert 4 <= label_count(school_spark(daily)) <= 7
+        assert label_count(school_spark(daily)) == SPARK_LABELS, f"n={n}"
 
 
 def test_spark_always_labels_first_and_last_point():

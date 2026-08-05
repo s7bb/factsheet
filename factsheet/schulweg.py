@@ -196,6 +196,7 @@ WINDOW_VON, WINDOW_BIS = 390, 510
 
 SLOTS = 6          # feste Zeilenzahl im Raster
 SLOT_ABSTAND = 10  # Mindestabstand zweier Slot-Mitten in Minuten
+SPARK_LABELS = 6   # Zielzahl der Beschriftungen der Sparkline
 
 
 def hhmm(minute):
@@ -329,8 +330,11 @@ def school_spark(daily):
     dots = "".join(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.3" fill="#1b4f8a"/>'
                    for px, py in pts)
 
-    step = max(1, round(len(days) / 6))
-    marked = {0, len(days) - 1} | set(range(0, len(days), step))
+    # Gleichmaessig verteilte Beschriftungen: immer hoechstens SPARK_LABELS,
+    # erster und letzter Punkt immer dabei. Eine feste Zielzahl statt einer
+    # Schrittweite, damit die Anzahl nicht je nach Monatslaenge ueberlaeuft.
+    letzter = len(days) - 1
+    marked = {round(i * letzter / (SPARK_LABELS - 1)) for i in range(SPARK_LABELS)}
     xlab = "".join(f'<text x="{pts[i][0]:.1f}" y="{H-4}" class="spark-lab">'
                    f'{days[i].day}</text>'
                    for i in sorted(marked))
